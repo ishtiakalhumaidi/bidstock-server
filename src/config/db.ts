@@ -23,19 +23,59 @@ export const initialDB = async () => {
   try {
     await pool.query(`
       CREATE TABLE IF NOT EXISTS users (
-        user_id INT AUTO_INCREMENT PRIMARY KEY,
-        email VARCHAR(100) UNIQUE NOT NULL,
-        phone VARCHAR(20),
-        status ENUM('active', 'blocked') DEFAULT 'active',
-        role ENUM('buyer', 'seller', 'warehouse_owner', 'admin') NOT NULL,
-        password VARCHAR(255) NOT NULL,
-        name VARCHAR(100),
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+      user_id INT PRIMARY KEY AUTO_INCREMENT,
+      email VARCHAR(255) UNIQUE NOT NULL,
+      phone VARCHAR(20),
+      status ENUM('active', 'inactive', 'suspended') DEFAULT 'active',
+      role VARCHAR(30) NOT NULL,
+CHECK (role IN ('buyer','seller','warehouse_owner','admin')),
+      password VARCHAR(255) NOT NULL,
+      name VARCHAR(255) NOT NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
       );
     `);
 
-    console.log("✅ Users table created successfully!");
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS buyers (
+      user_id INT PRIMARY KEY,
+      FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
+      );
+      `);
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS sellers (
+      user_id INT PRIMARY KEY,
+      FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
+      );
+      `);
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS warehouse_owners (
+      user_id INT PRIMARY KEY,
+      FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
+      );
+      `);
+
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS products(
+      product_id INT PRIMARY KEY AUTO_INCREMENT,
+      seller_id INT NOT NULL,
+      name VARCHAR(255) NOT NULL,
+      description TEXT,
+      price DECIMAL(10, 2) NOT NULL,
+      quantity INT NOT NULL DEFAULT 0,
+      category VARCHAR(100),
+      brand VARCHAR(100),
+      weight DECIMAL(10, 2) COMMENT 'Weight in kg',
+      image_url VARCHAR(500),
+      status ENUM('active', 'inactive', 'out_of_stock', 'discontinued') DEFAULT 'active',
+      rating DECIMAL(3, 2) DEFAULT 0.00 COMMENT 'Average rating out of 5',
+      total_reviews INT DEFAULT 0,
+      total_sales INT DEFAULT 0,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      FOREIGN KEY (seller_id) REFERENCES sellers(user_id) ON DELETE CASCADE
+      );
+        `);
   } catch (error: any) {
     console.error("DB Initialization Error:", error.message);
   }

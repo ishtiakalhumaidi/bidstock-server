@@ -1,15 +1,41 @@
+import type { QueryResult, ResultSetHeader } from "mysql2";
 import { pool } from "../../config/db";
 
 const createUser = async (payload: Record<string, unknown>) => {
   const { email, phone, status, role, password, name } = payload;
-  const result = await pool.query(
+  const [result] = await pool.query<ResultSetHeader>(
     `
         INSERT INTO users(email, phone, status, role, password, name ) VALUES(?,?,?,?,?,?)
         `,
     [email, phone, status, role, password, name]
   );
+  const insertId = result.insertId
 
-  return result;
+
+   switch (role) {
+      case 'buyer':
+        await pool.query(`INSERT INTO buyers (user_id) VALUES (?)`, [insertId]);
+        break;
+
+      case 'seller':
+        await pool.query(`INSERT INTO sellers (user_id) VALUES (?)`, [insertId]);
+        break;
+
+      case 'warehouse_owner':
+        await pool.query(
+          `INSERT INTO warehouse_owners (user_id) VALUES (?)`,
+          [insertId]
+        );
+        break;
+
+      case 'admin':
+        break;
+
+      default:
+        throw new Error('Invalid role');
+    }
+
+  return insertId;
 };
 
 const getUsers = async () => {
