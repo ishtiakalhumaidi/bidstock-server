@@ -91,7 +91,7 @@ CHECK (role IN ('buyer','seller','warehouse_owner','admin')),
 
 
     await pool.query(
-      `CREATE TABLE inventory(
+      `CREATE TABLE IF NOT EXISTS inventory(
       product_id INT NOT NULL,
       warehouse_id INT NOT NULL,
       stock_level INT NOT NULL DEFAULT 0,
@@ -100,6 +100,23 @@ CHECK (role IN ('buyer','seller','warehouse_owner','admin')),
       FOREIGN KEY (product_id) REFERENCES products(product_id) ON DELETE CASCADE,
       FOREIGN KEY (warehouse_id) REFERENCES warehouses(warehouse_id) ON DELETE CASCADE
 );`
+    )
+
+    await pool.query(
+      `CREATE TABLE  IF NOT EXISTS bids(
+      bid_id INT PRIMARY KEY AUTO_INCREMENT,
+      buyer_id INT NOT NULL,
+      product_id INT NOT NULL,
+      offered_price DECIMAL(10, 2) NOT NULL,
+      status ENUM('pending', 'accepted', 'rejected', 'expired') DEFAULT 'pending',
+      is_suspicious BOOLEAN DEFAULT FALSE,
+      flag_reason TEXT,
+      end_time TIMESTAMP,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (buyer_id) REFERENCES buyers(user_id) ON DELETE CASCADE,
+      FOREIGN KEY (product_id) REFERENCES products(product_id) ON DELETE CASCADE
+);
+`
     )
   } catch (error: any) {
     console.error("DB Initialization Error:", error.message);
