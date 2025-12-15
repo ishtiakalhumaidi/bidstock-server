@@ -88,6 +88,19 @@ CHECK (role IN ('buyer','seller','warehouse_owner','admin')),
       FOREIGN KEY (owner_id) REFERENCES warehouse_owners(user_id) ON DELETE CASCADE
 );`
       )
+
+
+    await pool.query(
+      `CREATE TABLE inventory(
+      product_id INT NOT NULL,
+      warehouse_id INT NOT NULL,
+      stock_level INT NOT NULL DEFAULT 0,
+      quantity INT NOT NULL DEFAULT 0,
+      PRIMARY KEY (product_id, warehouse_id),
+      FOREIGN KEY (product_id) REFERENCES products(product_id) ON DELETE CASCADE,
+      FOREIGN KEY (warehouse_id) REFERENCES warehouses(warehouse_id) ON DELETE CASCADE
+);`
+    )
   } catch (error: any) {
     console.error("DB Initialization Error:", error.message);
   }

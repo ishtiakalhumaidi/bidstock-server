@@ -3,6 +3,7 @@ import { initialDB } from "./config/db";
 import { userRouter } from "./modules/users/users.routes";
 import { productRouter } from "./modules/products/products.routers";
 import { warehouseRouter } from "./modules/warehouses/warehouse.routes";
+import { inventoryRouter } from "./modules/inventory/inventory.routers";
 
 export const app = express();
 app.use(express.json());
@@ -19,8 +20,11 @@ app.use("/api/v1/users", userRouter);
 // product CRUD
 app.use("/api/v1/products", productRouter);
 
-// product CRUD
+// warehouse CRUD
 app.use("/api/v1/warehouses", warehouseRouter);
+
+// inventory CRUD
+app.use("/api/v1/inventories", inventoryRouter);
 
 app.use((req: Request, res: Response) => {
   res.status(404).json({
