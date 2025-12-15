@@ -2,6 +2,7 @@ import express, { type Request, type Response } from "express";
 import { initialDB } from "./config/db";
 import { userRouter } from "./modules/users/users.routes";
 import { productRouter } from "./modules/products/products.routers";
+import { warehouseRouter } from "./modules/warehouses/warehouse.routes";
 
 export const app = express();
 app.use(express.json());
@@ -10,12 +11,16 @@ app.get("/", (req: Request, res: Response) => {
   res.send("Welcome to BidStock server...");
 });
 
+initialDB();
+
 // user CRUD
 app.use("/api/v1/users", userRouter);
 
 // product CRUD
 app.use("/api/v1/products", productRouter);
-initialDB();
+
+// product CRUD
+app.use("/api/v1/warehouses", warehouseRouter);
 
 app.use((req: Request, res: Response) => {
   res.status(404).json({

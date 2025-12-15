@@ -49,7 +49,7 @@ CHECK (role IN ('buyer','seller','warehouse_owner','admin')),
       );
       `);
     await pool.query(`
-      CREATE TABLE IF NOT EXISTS warehouse_owners (
+      CREATE TABLE IF NOT EXISTS warehouse_owners(
       user_id INT PRIMARY KEY,
       FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
       );
@@ -76,6 +76,18 @@ CHECK (role IN ('buyer','seller','warehouse_owner','admin')),
       FOREIGN KEY (seller_id) REFERENCES sellers(user_id) ON DELETE CASCADE
       );
         `);
+
+
+    await pool.query(
+      `CREATE TABLE IF NOT EXISTS warehouses(
+      warehouse_id INT PRIMARY KEY AUTO_INCREMENT,
+      owner_id INT NOT NULL,
+      location VARCHAR(255) NOT NULL,
+      capacity INT NOT NULL,
+      booked INT DEFAULT 0,
+      FOREIGN KEY (owner_id) REFERENCES warehouse_owners(user_id) ON DELETE CASCADE
+);`
+      )
   } catch (error: any) {
     console.error("DB Initialization Error:", error.message);
   }
