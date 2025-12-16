@@ -46,6 +46,24 @@ const getInventories = async (req: Request, res: Response) => {
     });
   }
 };
+const getMyInventory = async (req: Request, res: Response) => {
+  try {
+    if (!req.user) {
+      return res.status(401).json({ success: false, message: "Unauthorized" });
+    }
+
+    const result = await inventoryService.getMyInventory(req.user.user_id as string);
+
+    return res.status(200).json({
+      success: true,
+      message: "My inventory retrieved successfully",
+      data: result[0],
+    });
+  } catch (error: any) {
+    console.error("error:", error);
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
 
 const getSingleInventory = async (req: Request, res: Response) => {
   try {
@@ -138,6 +156,7 @@ export const inventoryController = {
   addInventory,
   getInventories,
   getSingleInventory,
+  getMyInventory,
   updateInventory,
   deleteInventory,
 };

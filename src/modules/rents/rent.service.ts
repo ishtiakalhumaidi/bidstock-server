@@ -4,7 +4,6 @@ import { pool } from "../../config/db";
 const addRent = async (payload: Record<string, unknown>) => {
   const { seller_id, warehouse_id, start_date, end_date } = payload;
 
-  // 1. Check if seller exists
   const [sellerCheck] = await pool.query(
     `SELECT user_id FROM sellers WHERE user_id = ?`,
     [seller_id]
@@ -14,9 +13,8 @@ const addRent = async (payload: Record<string, unknown>) => {
     throw new Error("Seller not found");
   }
 
-  // 2. Check if warehouse exists
   const [warehouseCheck] = await pool.query(
-    `SELECT warehouse_id, capacity, booked FROM warehouses WHERE warehouse_id = ?`,
+    `SELECT warehouse_id, capacity, status FROM warehouses WHERE warehouse_id = ?`,
     [warehouse_id]
   );
 
@@ -26,16 +24,18 @@ const addRent = async (payload: Record<string, unknown>) => {
 
   const warehouse = (warehouseCheck as any[])[0];
 
-  // 3. Check warehouse capacity
-  if (warehouse.booked >= warehouse.capacity) {
-    throw new Error("Warehouse is at full capacity");
+  if (warehouse.status === 'booked') {
+    throw new Error("Warehouse is already fully booked");
+  }
+  
+  if (warehouse.status === 'maintenance') {
+    throw new Error("Warehouse is currently under maintenance");
   }
 
-  // 4. Check for overlapping active rents (optional - if you want exclusive access)
+  // 4. Check for overlapping active rents
   const [overlapCheck] = await pool.query(
     `SELECT rent_id FROM rents 
      WHERE warehouse_id = ? 
-     AND seller_id = ?
      AND status = 'active'
      AND (
        (start_date <= ? AND (end_date IS NULL OR end_date >= ?))
@@ -44,7 +44,6 @@ const addRent = async (payload: Record<string, unknown>) => {
      )`,
     [
       warehouse_id,
-      seller_id,
       start_date, start_date,
       end_date || '9999-12-31', end_date || '9999-12-31',
       start_date, end_date || '9999-12-31'
@@ -52,7 +51,7 @@ const addRent = async (payload: Record<string, unknown>) => {
   );
 
   if ((overlapCheck as any[]).length > 0) {
-    throw new Error("You already have an active rent for this warehouse during this period");
+    throw new Error("Warehouse is already rented for this period");
   }
 
   // 5. Insert rent
@@ -65,6 +64,11 @@ const addRent = async (payload: Record<string, unknown>) => {
       status
     ) VALUES (?,?,?,?,?)`,
     [seller_id, warehouse_id, start_date, end_date ?? null, 'active']
+  );
+
+  await pool.query(
+    `UPDATE warehouses SET status = 'booked' WHERE warehouse_id = ?`,
+    [warehouse_id]
   );
 
   return result.insertId;
@@ -95,8 +99,7 @@ const getSingleRent = async (rent_id: string) => {
       u.email as seller_email,
       u.phone as seller_phone,
       w.location as warehouse_location,
-      w.capacity as warehouse_capacity,
-      w.booked as warehouse_booked
+      w.capacity as warehouse_capacity
     FROM rents r
     JOIN sellers s ON r.seller_id = s.user_id
     JOIN users u ON s.user_id = u.user_id
@@ -107,15 +110,12 @@ const getSingleRent = async (rent_id: string) => {
   return result;
 };
 
-
 const getMyRents = async (seller_id: string) => {
-  
   const result = await pool.query(
     `SELECT 
       r.*,
       w.location as warehouse_location,
       w.capacity as warehouse_capacity,
-      w.booked as warehouse_booked,
       wo.user_id as owner_id,
       u.name as owner_name,
       u.email as owner_email,
@@ -131,9 +131,6 @@ const getMyRents = async (seller_id: string) => {
   return result;
 };
 
-/**
- * Get rents for a specific warehouse (for warehouse owners)
- */
 const getWarehouseRents = async (warehouse_id: string) => {
   const result = await pool.query(
     `SELECT 
@@ -157,8 +154,6 @@ const updateRent = async (
 ) => {
   const { start_date, end_date, status } = payload;
 
-  // If changing to 'completed' or 'cancelled', no validation needed
-  // If changing dates, should check overlaps again
   if (start_date || end_date) {
     const [rentCheck] = await pool.query(
       `SELECT warehouse_id, seller_id FROM rents WHERE rent_id = ?`,
@@ -171,7 +166,6 @@ const updateRent = async (
 
     const { warehouse_id, seller_id } = (rentCheck as any[])[0];
 
-    // Check for overlapping rents (excluding current rent)
     const [overlapCheck] = await pool.query(
       `SELECT rent_id FROM rents 
        WHERE warehouse_id = ? 
@@ -208,12 +202,28 @@ const updateRent = async (
   if (result.affectedRows === 0) {
     throw new Error("no rent found to update");
   }
+  
+  if (status === 'completed' || status === 'cancelled') {
+      const [rentData] = await pool.query(`SELECT warehouse_id FROM rents WHERE rent_id=?`, [rent_id]);
+      if((rentData as any[]).length > 0) {
+          await pool.query(`UPDATE warehouses SET status='available' WHERE warehouse_id=?`, [(rentData as any[])[0].warehouse_id]);
+      }
+  }
 
   return result;
 };
 
 const deleteRent = async (rent_id: string) => {
-  // Check if there's inventory associated with this rent
+  const [rentData] = await pool.query(
+    `SELECT warehouse_id FROM rents WHERE rent_id = ?`, 
+    [rent_id]
+  );
+  
+  if ((rentData as any[]).length === 0) {
+      throw new Error("Rent not found");
+  }
+  const { warehouse_id } = (rentData as any[])[0];
+
   const [inventoryCheck] = await pool.query(
     `SELECT i.inventory_id 
      FROM inventory i
@@ -235,6 +245,11 @@ const deleteRent = async (rent_id: string) => {
   if (result.affectedRows === 0) {
     throw new Error("no rent found to delete");
   }
+
+  await pool.query(
+    `UPDATE warehouses SET status = 'available' WHERE warehouse_id = ?`,
+    [warehouse_id]
+  );
 
   return result;
 };

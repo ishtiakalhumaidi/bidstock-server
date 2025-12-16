@@ -3,7 +3,13 @@ import { inventoryController } from "./inventory.controller";
 import auth from "../../middleware/auth";
 
 const router = Router();
-router.get("/", auth("admin", "warehouse_owner"), inventoryController.getInventories);
+router.get(
+  "/",
+  auth(),
+  inventoryController.getInventories
+);
+
+router.get("/my-inventory", auth("seller"), inventoryController.getMyInventory);
 router.get(
   "/:product_id/:warehouse_id",
   inventoryController.getSingleInventory
@@ -13,7 +19,7 @@ router.post("/", auth("seller"), inventoryController.addInventory);
 
 router.put(
   "/:product_id/:warehouse_id",
-  auth("admin", "seller"), 
+  auth("admin", "seller"),
   inventoryController.updateInventory
 );
 

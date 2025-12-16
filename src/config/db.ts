@@ -1,12 +1,10 @@
 import mysql from "mysql2/promise";
 import config from ".";
 
-// Validate critical fields
 if (!config.host || !config.user || !config.database || !config.db_port) {
-  throw new Error("❌ Database configuration is missing or invalid!");
+  throw new Error("Database configuration is missing or invalid!");
 }
 
-// Create MySQL connection pool
 export const pool = mysql.createPool({
   host: config.host,
   user: config.user,
@@ -28,7 +26,7 @@ export const initialDB = async () => {
       phone VARCHAR(20),
       status ENUM('active', 'inactive', 'suspended') DEFAULT 'active',
       role VARCHAR(30) NOT NULL,
-CHECK (role IN ('buyer','seller','warehouse_owner','admin')),
+      CHECK (role IN ('buyer','seller','warehouse_owner','admin')),
       password VARCHAR(255) NOT NULL,
       name VARCHAR(255) NOT NULL,
       user_image VARCHAR(255) DEFAULT NULL,
@@ -82,8 +80,9 @@ CHECK (role IN ('buyer','seller','warehouse_owner','admin')),
       warehouse_id INT PRIMARY KEY AUTO_INCREMENT,
       owner_id INT NOT NULL,
       location VARCHAR(255) NOT NULL,
+      price DECIMAL(10, 2) NOT NULL,
       capacity INT NOT NULL,
-      booked INT DEFAULT 0,
+      status ENUM('available', 'booked', 'maintenance') DEFAULT 'available',
       FOREIGN KEY (owner_id) REFERENCES warehouse_owners(user_id) ON DELETE CASCADE
 );`
     );
@@ -106,21 +105,35 @@ CHECK (role IN ('buyer','seller','warehouse_owner','admin')),
     );
 
     await pool.query(
-      `CREATE TABLE  IF NOT EXISTS bids(
-      bid_id INT PRIMARY KEY AUTO_INCREMENT,
-      buyer_id INT NOT NULL,
-      product_id INT NOT NULL,
-      offered_price DECIMAL(10, 2) NOT NULL,
-      status ENUM('pending', 'accepted', 'rejected', 'expired') DEFAULT 'pending',
-      is_suspicious BOOLEAN DEFAULT FALSE,
-      flag_reason TEXT,
-      end_time TIMESTAMP,
-      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-      FOREIGN KEY (buyer_id) REFERENCES buyers(user_id) ON DELETE CASCADE,
-      FOREIGN KEY (product_id) REFERENCES products(product_id) ON DELETE CASCADE
+      `CREATE TABLE IF NOT EXISTS bids(
+    bid_id INT PRIMARY KEY AUTO_INCREMENT,
+    product_id INT NOT NULL,
+    seller_id INT NOT NULL,
+    start_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    end_time TIMESTAMP NULL DEFAULT NULL,
+    status ENUM('open', 'closed') DEFAULT 'open',
+    FOREIGN KEY (product_id) REFERENCES products(product_id) ON DELETE CASCADE,
+    FOREIGN KEY (seller_id) REFERENCES sellers(user_id) ON DELETE CASCADE
 );
+
 `
     );
+
+    await pool.query(
+      `CREATE TABLE IF NOT EXISTS offers(
+    offer_id INT PRIMARY KEY AUTO_INCREMENT,
+    bid_id INT NOT NULL,
+    buyer_id INT NOT NULL,
+    offered_price DECIMAL(10, 2) NOT NULL,
+    status ENUM('pending', 'accepted', 'rejected') DEFAULT 'pending',
+    is_suspicious BOOLEAN DEFAULT FALSE,
+    flag_reason TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (bid_id) REFERENCES bids(bid_id) ON DELETE CASCADE,
+    FOREIGN KEY (buyer_id) REFERENCES buyers(user_id) ON DELETE CASCADE
+);
+`
+    )
 
     await pool.query(
       `CREATE TABLE IF NOT EXISTS transactions(

@@ -78,7 +78,24 @@ const getSingleInventory = async (product_id: string, warehouse_id: string) => {
   );
   return result;
 };
-
+const getMyInventory = async (seller_id: string) => {
+      console.log(seller_id);
+  const result = await pool.query(`
+    SELECT 
+      i.*,
+      p.name as product_name,
+      p.description as product_desc,
+      p.image_url,
+      p.price as unit_price,
+      w.location as warehouse_location
+    FROM inventory i
+    JOIN products p ON i.product_id = p.product_id
+    JOIN warehouses w ON i.warehouse_id = w.warehouse_id
+    WHERE p.seller_id = ?
+    ORDER BY i.created_at DESC
+  `, [seller_id]);
+  return result;
+};
 const updateInventory = async (
   payload: Record<string, unknown>,
   product_id: string,
@@ -135,6 +152,7 @@ const deleteInventory = async (product_id: string, warehouse_id: string) => {
 export const inventoryService = {
   addInventory,
   getInventories,
+  getMyInventory,
   getSingleInventory,
   updateInventory,
   deleteInventory,

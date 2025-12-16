@@ -14,7 +14,7 @@ router.get(
   transactionsController.getSingleTransaction
 );
 
-router.post("/", auth("admin"), transactionsController.addTransaction);
+router.post("/", auth(), transactionsController.addTransaction);
 
 
 router.put(

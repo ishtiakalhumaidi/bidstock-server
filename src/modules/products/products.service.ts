@@ -54,20 +54,20 @@ const getSingleProduct = async (product_id: string) => {
   // Get product with inventory details
   const result = await pool.query(
     `SELECT 
-      p.*,
-      COALESCE(SUM(i.quantity), 0) as available_quantity,
-      JSON_ARRAYAGG(
-        JSON_OBJECT(
-          'warehouse_id', i.warehouse_id,
-          'quantity', i.quantity,
-          'warehouse_location', w.location
-        )
-      ) as inventory_details
-    FROM products p
-    LEFT JOIN inventory i ON p.product_id = i.product_id
-    LEFT JOIN warehouses w ON i.warehouse_id = w.warehouse_id
-    WHERE p.product_id = ?
-    GROUP BY p.product_id`,
+  p.*,
+  COALESCE(SUM(i.quantity), 0) as available_quantity,
+  CONCAT('[', GROUP_CONCAT(
+    JSON_OBJECT(
+      'warehouse_id', i.warehouse_id,
+      'quantity', i.quantity,
+      'warehouse_location', w.location
+    )
+  ), ']') as inventory_details
+FROM products p
+LEFT JOIN inventory i ON p.product_id = i.product_id
+LEFT JOIN warehouses w ON i.warehouse_id = w.warehouse_id
+WHERE p.product_id = ?
+GROUP BY p.product_id`,
     [product_id]
   );
 

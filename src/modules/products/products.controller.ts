@@ -1,5 +1,6 @@
 import type { Request, Response } from "express";
 import { productService } from "./products.service";
+import type { JwtPayload } from "jsonwebtoken";
 
 const addProduct = async (req: Request, res: Response) => {
   try {
@@ -66,14 +67,14 @@ const getSingleProduct = async (req: Request, res: Response) => {
 
 const getSellerProducts = async (req: Request, res: Response) => {
   try {
-    const { user_id } = req.params;
-
     if (!req.user) {
       return res.status(401).json({
         success: false,
         message: "Unauthorized: no user info",
       });
     }
+    const { user_id } = req.user as JwtPayload;
+    console.log(user_id)
 
     const products = await productService.getSellerProducts(user_id as string);
 

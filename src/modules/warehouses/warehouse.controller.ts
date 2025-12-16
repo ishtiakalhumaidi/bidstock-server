@@ -1,5 +1,6 @@
 import type { Request, Response } from "express";
 import { warehouseService } from "./warehouse.service";
+import type { JwtPayload } from "jsonwebtoken";
 
 const addWarehouse = async (req: Request, res: Response) => {
   try {
@@ -22,6 +23,26 @@ const addWarehouse = async (req: Request, res: Response) => {
 const getWarehouses = async (req: Request, res: Response) => {
   try {
     const result = await warehouseService.getWarehouses();
+
+    return res.status(200).json({
+      success: true,
+      message: "warehouses retrieved successfully",
+      data: result[0],
+    });
+  } catch (error: any) {
+    console.error("error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+const getMyWarehouses = async (req: Request, res: Response) => {
+  try {
+    const user = req.user as JwtPayload
+    console.log(user);
+    const result = await warehouseService.getMyWarehouses(req.user?.user_id as string);
 
     return res.status(200).json({
       success: true,
@@ -107,5 +128,6 @@ export const warehouseController = {
   getWarehouses,
   getSingleWarehouse,
   updateWarehouse,
+  getMyWarehouses,
   deleteWarehouse
 };

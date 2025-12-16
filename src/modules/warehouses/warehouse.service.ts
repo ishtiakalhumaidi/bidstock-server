@@ -2,16 +2,26 @@ import type { ResultSetHeader } from "mysql2";
 import { pool } from "../../config/db";
 
 const addWarehouse = async (payload: Record<string, unknown>) => {
-  const { owner_id, location, capacity } = payload;
+
+  const { owner_id, location, capacity, price } = payload;
+
   const [result] = await pool.query<ResultSetHeader>(
-    `INSERT INTO warehouses(owner_id, location, capacity) VALUES(?,?,?)`,
-    [owner_id, location, capacity]
+    `INSERT INTO warehouses(owner_id, location, capacity, price) VALUES(?,?,?,?)`,
+    [owner_id, location, capacity, price]
   );
   return result.insertId;
 };
 
 const getWarehouses = async () => {
   const result = await pool.query(`SELECT * FROM warehouses`);
+  return result;
+};
+
+const getMyWarehouses = async (owner_id: string) => {
+  const result = await pool.query(
+    `SELECT * FROM warehouses WHERE owner_id=?`,
+    [owner_id]
+  );
   return result;
 };
 
@@ -27,11 +37,13 @@ const updateWarehouse = async (
   payload: Record<string, unknown>,
   id: string
 ) => {
-  const { owner_id, location, capacity, booked } = payload;
+  const { location, capacity, price, status } = payload;
+
   const [result] = await pool.query<ResultSetHeader>(
-    `UPDATE warehouses SET location=?,capacity=?, booked=? WHERE warehouse_id=?`,
-    [location, capacity, Number(capacity) - Number(booked), id]
+    `UPDATE warehouses SET location=?, capacity=?, price=?, status=? WHERE warehouse_id=?`,
+    [location, capacity, price, status, id]
   );
+
   if (result.affectedRows === 0) {
     throw new Error("no warehouse found to update");
   }
@@ -54,6 +66,7 @@ export const warehouseService = {
   addWarehouse,
   getWarehouses,
   getSingleWarehouse,
+  getMyWarehouses,
   updateWarehouse,
   deleteWarehouse,
 };

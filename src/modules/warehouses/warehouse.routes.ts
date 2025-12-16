@@ -5,6 +5,7 @@ import auth from "../../middleware/auth";
 const router = Router();
 
 router.get("/", warehouseController.getWarehouses);
+router.get("/my-warehouse", auth(), warehouseController.getMyWarehouses);
 router.get("/:warehouse_id", warehouseController.getSingleWarehouse);
 router.post("/", auth("warehouse_owner"), warehouseController.addWarehouse);
 router.put(

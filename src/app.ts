@@ -1,4 +1,5 @@
 import express, { type Request, type Response } from "express";
+import cors from "cors";
 import { initialDB } from "./config/db";
 import { userRouter } from "./modules/users/users.routes";
 import { productRouter } from "./modules/products/products.routers";
@@ -9,9 +10,11 @@ import { transactionsRouter } from "./modules/transactions/transactions.router";
 import { notificationsRouter } from "./modules/notifications/notifications.route";
 import { rentRouter } from "./modules/rents/rent.routes";
 import { authRouter } from "./modules/auth/auth.routes";
+import { offersRouter } from "./modules/offers/offers.routes";
 
 export const app = express();
 app.use(express.json());
+app.use(cors());
 
 app.get("/", (req: Request, res: Response) => {
   res.send("Welcome to BidStock server...");
@@ -33,6 +36,9 @@ app.use("/api/v1/inventories", inventoryRouter);
 
 // bid CRUD
 app.use("/api/v1/bids", bidsRouter);
+
+// offers CRUD
+app.use("/api/v1/bids", offersRouter);
 
 // transactions CRUD
 app.use("/api/v1/transactions", transactionsRouter);

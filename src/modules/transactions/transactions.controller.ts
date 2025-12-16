@@ -62,13 +62,17 @@ const getSingleTransaction = async (req: Request, res: Response) => {
   }
 };
 
-/**
- * everyone can see their own transactions
- * role & id will come from token later
- */
 const getMyTransactions = async (req: Request, res: Response) => {
   try {
-    const { role, id } = req.params;
+    // 1. Check Auth
+    if (!req.user) {
+      return res.status(401).json({
+        success: false,
+        message: "Unauthorized",
+      });
+    }
+    const role = req.user.role; 
+    const id = req.user.user_id;
 
     const result = await transactionsService.getMyTransactions(
       role as string,
@@ -82,7 +86,6 @@ const getMyTransactions = async (req: Request, res: Response) => {
     });
   } catch (error: any) {
     console.error("error:", error);
-
     return res.status(500).json({
       success: false,
       message: error.message,
