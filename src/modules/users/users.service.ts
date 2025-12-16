@@ -10,6 +10,7 @@ const getUsers = async () => {
   return result;
 };
 const getSingleUser = async (user_id: string) => {
+  
   const result = await pool.query(
     `
         SELECT * FROM users WHERE user_id=?

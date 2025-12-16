@@ -58,26 +58,24 @@ CHECK (role IN ('buyer','seller','warehouse_owner','admin')),
 
     await pool.query(`
       CREATE TABLE IF NOT EXISTS products(
-      product_id INT PRIMARY KEY AUTO_INCREMENT,
-      seller_id INT NOT NULL,
-      name VARCHAR(255) NOT NULL,
-      description TEXT,
-      price DECIMAL(10, 2) NOT NULL,
-      quantity INT NOT NULL DEFAULT 0,
-      category VARCHAR(100),
-      brand VARCHAR(100),
-      weight DECIMAL(10, 2) COMMENT 'Weight in kg',
-      image_url VARCHAR(500),
-      status ENUM('active', 'inactive', 'out_of_stock', 'discontinued') DEFAULT 'active',
-      rating DECIMAL(3, 2) DEFAULT 0.00 COMMENT 'Average rating out of 5',
-      total_reviews INT DEFAULT 0,
-      total_sales INT DEFAULT 0,
-      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-      FOREIGN KEY (seller_id) REFERENCES sellers(user_id) ON DELETE CASCADE
-      );
+  product_id INT PRIMARY KEY AUTO_INCREMENT,
+  seller_id INT NOT NULL,
+  name VARCHAR(255) NOT NULL,
+  description TEXT,
+  price DECIMAL(10, 2) NOT NULL,
+  category VARCHAR(100),
+  brand VARCHAR(100),
+  weight DECIMAL(10, 2),
+  image_url VARCHAR(500),
+  status ENUM('active', 'inactive', 'discontinued') DEFAULT 'active',
+  rating DECIMAL(3, 2) DEFAULT 0.00,
+  total_reviews INT DEFAULT 0,
+  total_sales INT DEFAULT 0,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  FOREIGN KEY (seller_id) REFERENCES sellers(user_id) ON DELETE CASCADE
+);
         `);
-
 
     await pool.query(
       `CREATE TABLE IF NOT EXISTS warehouses(
@@ -88,20 +86,24 @@ CHECK (role IN ('buyer','seller','warehouse_owner','admin')),
       booked INT DEFAULT 0,
       FOREIGN KEY (owner_id) REFERENCES warehouse_owners(user_id) ON DELETE CASCADE
 );`
-      )
-
+    );
 
     await pool.query(
       `CREATE TABLE IF NOT EXISTS inventory(
-      product_id INT NOT NULL,
-      warehouse_id INT NOT NULL,
-      stock_level INT NOT NULL DEFAULT 0,
-      quantity INT NOT NULL DEFAULT 0,
-      PRIMARY KEY (product_id, warehouse_id),
-      FOREIGN KEY (product_id) REFERENCES products(product_id) ON DELETE CASCADE,
-      FOREIGN KEY (warehouse_id) REFERENCES warehouses(warehouse_id) ON DELETE CASCADE
+  inventory_id INT PRIMARY KEY AUTO_INCREMENT,
+  product_id INT NOT NULL,
+  warehouse_id INT NOT NULL,
+  quantity INT NOT NULL DEFAULT 0,
+  min_stock_level INT DEFAULT 10,
+  max_stock_level INT DEFAULT 1000,
+  last_restocked TIMESTAMP,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  UNIQUE KEY unique_product_warehouse (product_id, warehouse_id),
+  FOREIGN KEY (product_id) REFERENCES products(product_id) ON DELETE CASCADE,
+  FOREIGN KEY (warehouse_id) REFERENCES warehouses(warehouse_id) ON DELETE CASCADE
 );`
-    )
+    );
 
     await pool.query(
       `CREATE TABLE  IF NOT EXISTS bids(
@@ -118,10 +120,10 @@ CHECK (role IN ('buyer','seller','warehouse_owner','admin')),
       FOREIGN KEY (product_id) REFERENCES products(product_id) ON DELETE CASCADE
 );
 `
-    )
+    );
 
-  await pool.query(
-    `CREATE TABLE IF NOT EXISTS transactions(
+    await pool.query(
+      `CREATE TABLE IF NOT EXISTS transactions(
     transaction_id INT PRIMARY KEY AUTO_INCREMENT,
     bid_id INT,
     from_role ENUM('buyer', 'seller', 'warehouse_owner', 'platform') NOT NULL,
@@ -141,10 +143,10 @@ CHECK (role IN ('buyer','seller','warehouse_owner','admin')),
     transaction_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (bid_id) REFERENCES bids(bid_id) ON DELETE SET NULL
 );`
-  )
+    );
 
-  await pool.query(
-    `CREATE TABLE IF NOT EXISTS notifications(
+    await pool.query(
+      `CREATE TABLE IF NOT EXISTS notifications(
     notification_id INT PRIMARY KEY AUTO_INCREMENT,
     user_id INT NOT NULL,
     type ENUM('bid_update', 'transaction', 'inventory_alert', 'system') NOT NULL,
@@ -162,9 +164,9 @@ CHECK (role IN ('buyer','seller','warehouse_owner','admin')),
     FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE,
     INDEX idx_user_read (user_id, is_read)
 );`
-  )
+    );
 
-  await pool.query(`
+    await pool.query(`
     CREATE TABLE IF NOT EXISTS rents(
     rent_id INT PRIMARY KEY AUTO_INCREMENT,
     seller_id INT NOT NULL,
@@ -177,9 +179,7 @@ CHECK (role IN ('buyer','seller','warehouse_owner','admin')),
     FOREIGN KEY (seller_id) REFERENCES sellers(user_id) ON DELETE CASCADE,
     FOREIGN KEY (warehouse_id) REFERENCES warehouses(warehouse_id) ON DELETE CASCADE
 );
-`)
-
-
+`);
   } catch (error: any) {
     console.error("DB Initialization Error:", error.message);
   }

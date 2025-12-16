@@ -1,17 +1,25 @@
 import { Router } from "express";
 import { inventoryController } from "./inventory.controller";
+import auth from "../../middleware/auth";
 
 const router = Router();
-
-router.get("/", inventoryController.getInventories);
+router.get("/", auth("admin", "warehouse_owner"), inventoryController.getInventories);
 router.get(
   "/:product_id/:warehouse_id",
   inventoryController.getSingleInventory
 );
-router.post("/", inventoryController.addInventory);
-router.put("/:product_id/:warehouse_id", inventoryController.updateInventory);
+
+router.post("/", auth("seller"), inventoryController.addInventory);
+
+router.put(
+  "/:product_id/:warehouse_id",
+  auth("admin", "seller"), 
+  inventoryController.updateInventory
+);
+
 router.delete(
   "/:product_id/:warehouse_id",
+  auth("admin", "seller"),
   inventoryController.deleteInventory
 );
 

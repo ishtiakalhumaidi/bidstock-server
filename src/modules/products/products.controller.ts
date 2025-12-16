@@ -3,7 +3,13 @@ import { productService } from "./products.service";
 
 const addProduct = async (req: Request, res: Response) => {
   try {
-    const result = await productService.addProduct(req.body);
+    if(!req.user){
+      return res.status(401).json({
+        success: false,
+        message: "Unauthorized",
+      });
+    }
+    const result = await productService.addProduct(req.body, req.user.user_id as string);
 
     return res.status(201).json({
       success: true,
@@ -58,11 +64,18 @@ const getSingleProduct = async (req: Request, res: Response) => {
   }
 };
 
-const getSellerProducts= async (req: Request, res: Response) => {
+const getSellerProducts = async (req: Request, res: Response) => {
   try {
-    const seller_id = req.params.seller_id;
+    const { user_id } = req.params;
 
-    const products = await productService.getSellerProducts(seller_id as string);
+    if (!req.user) {
+      return res.status(401).json({
+        success: false,
+        message: "Unauthorized: no user info",
+      });
+    }
+
+    const products = await productService.getSellerProducts(user_id as string);
 
     return res.status(200).json({
       success: true,
@@ -76,11 +89,14 @@ const getSellerProducts= async (req: Request, res: Response) => {
   }
 };
 
-
 const updateProduct = async (req: Request, res: Response) => {
   try {
-    const {product_id} = req.params
-    const result = await productService.updateProduct(req.body,product_id as string);
+    const { product_id } = req.params;
+    
+    const result = await productService.updateProduct(
+      req.body,
+      product_id as string
+    );
 
     return res.status(200).json({
       success: true,
@@ -96,9 +112,9 @@ const updateProduct = async (req: Request, res: Response) => {
   }
 };
 
-const deleteProduct= async (req: Request, res: Response) => {
+const deleteProduct = async (req: Request, res: Response) => {
   try {
-    const {product_id} = req.params
+    const { product_id } = req.params;
     const result = await productService.deleteProduct(product_id as string);
 
     return res.status(200).json({
@@ -121,5 +137,5 @@ export const productController = {
   getSingleProduct,
   getSellerProducts,
   updateProduct,
-  deleteProduct
+  deleteProduct,
 };

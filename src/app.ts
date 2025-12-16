@@ -41,7 +41,7 @@ app.use("/api/v1/transactions", transactionsRouter);
 app.use("/api/v1/notifications", notificationsRouter);
 
 // rents CRUD
-app.use("/api/v1/notifications", rentRouter);
+app.use("/api/v1/rents", rentRouter);
 
 // auth
 app.use("/api/v1/auth", authRouter);

@@ -1,5 +1,6 @@
 import type { Request, Response } from "express";
 import { rentService } from "./rent.service";
+import { pool } from "../../config/db";
 
 const addRent = async (req: Request, res: Response) => {
   try {
@@ -60,18 +61,67 @@ const getSingleRent = async (req: Request, res: Response) => {
   }
 };
 
-/**
- * seller can see their own rents
- */
+
 const getMyRents = async (req: Request, res: Response) => {
   try {
-    const { seller_id } = req.params;
+    if (!req.user) {
+      return res.status(401).json({
+        success: false,
+        message: "Unauthorized",
+      });
+    }
 
+    const seller_id = req.user.user_id;
+  console.log(seller_id)
     const result = await rentService.getMyRents(seller_id as string);
 
     return res.status(200).json({
       success: true,
       message: "my rents retrieved successfully",
+      data: result[0],
+    });
+  } catch (error: any) {
+    console.error("error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+
+const getWarehouseRents = async (req: Request, res: Response) => {
+  try {
+    const { warehouse_id } = req.params;
+
+    if (!req.user) {
+      return res.status(401).json({
+        success: false,
+        message: "Unauthorized",
+      });
+    }
+
+    // Verify the user owns this warehouse
+    if (req.user.role === "warehouse_owner") {
+      const [warehouseCheck] = await pool.query(
+        `SELECT warehouse_id FROM warehouses WHERE warehouse_id = ? AND owner_id = ?`,
+        [warehouse_id, req.user.user_id]
+      );
+
+      if ((warehouseCheck as any[]).length === 0) {
+        return res.status(403).json({
+          success: false,
+          message: "You don't own this warehouse",
+        });
+      }
+    }
+
+    const result = await rentService.getWarehouseRents(warehouse_id as string);
+
+    return res.status(200).json({
+      success: true,
+      message: "warehouse rents retrieved successfully",
       data: result[0],
     });
   } catch (error: any) {
@@ -129,6 +179,7 @@ export const rentController = {
   getRents,
   getSingleRent,
   getMyRents,
+  getWarehouseRents,
   updateRent,
   deleteRent,
 };

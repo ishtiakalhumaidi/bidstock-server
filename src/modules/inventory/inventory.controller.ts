@@ -3,6 +3,14 @@ import { inventoryService } from "./inventory.service";
 
 const addInventory = async (req: Request, res: Response) => {
   try {
+    const user = req.user
+    if (!user){
+      return res.status(401).json({
+        success: false,
+        message: "Unauthorized",
+      });
+    }
+    
     const result = await inventoryService.addInventory(req.body);
 
     return res.status(201).json({
@@ -67,11 +75,27 @@ const updateInventory = async (req: Request, res: Response) => {
   try {
     const { product_id, warehouse_id } = req.params;
 
-    await inventoryService.updateInventory(
-      req.body,
-      product_id as string,
-      warehouse_id as string
-    );
+    if (!req.user) {
+      return res.status(401).json({
+        success: false,
+        message: "Unauthorized: no user info",
+      });
+    }
+
+    if (req.user.role === "seller") {
+      await inventoryService.updateInventory(
+        req.body,
+        product_id as string,
+        warehouse_id as string,
+        req.user.user_id as string
+      );
+    } else {
+      await inventoryService.updateInventory(
+        req.body,
+        product_id as string,
+        warehouse_id as string
+      );
+    }
 
     return res.status(200).json({
       success: true,
