@@ -31,6 +31,7 @@ export const initialDB = async () => {
 CHECK (role IN ('buyer','seller','warehouse_owner','admin')),
       password VARCHAR(255) NOT NULL,
       name VARCHAR(255) NOT NULL,
+      user_image VARCHAR(255) DEFAULT NULL,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
       );
@@ -118,6 +119,67 @@ CHECK (role IN ('buyer','seller','warehouse_owner','admin')),
 );
 `
     )
+
+  await pool.query(
+    `CREATE TABLE IF NOT EXISTS transactions(
+    transaction_id INT PRIMARY KEY AUTO_INCREMENT,
+    bid_id INT,
+    from_role ENUM('buyer', 'seller', 'warehouse_owner', 'platform') NOT NULL,
+    from_id INT NULL,
+    to_role ENUM('buyer', 'seller', 'warehouse_owner', 'platform') NOT NULL,
+    to_id INT NULL,
+    transaction_type ENUM(
+      'payment',
+      'refund',
+      'commission',
+      'warehouse_fee'
+    ) NOT NULL,
+    amount DECIMAL(10,2) NOT NULL,
+    status ENUM('pending', 'completed', 'failed') DEFAULT 'completed',
+    payment_method ENUM('bkash', 'nagad', 'card', 'bank', 'wallet'),
+    reference_id VARCHAR(100),
+    transaction_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (bid_id) REFERENCES bids(bid_id) ON DELETE SET NULL
+);`
+  )
+
+  await pool.query(
+    `CREATE TABLE IF NOT EXISTS notifications(
+    notification_id INT PRIMARY KEY AUTO_INCREMENT,
+    user_id INT NOT NULL,
+    type ENUM('bid_update', 'transaction', 'inventory_alert', 'system') NOT NULL,
+    message TEXT NOT NULL,
+    related_entity_type ENUM(
+      'bid',
+      'transaction',
+      'inventory',
+      'warehouse',
+      'system'
+    ),
+    related_entity_id INT,
+    is_read BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE,
+    INDEX idx_user_read (user_id, is_read)
+);`
+  )
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS rents(
+    rent_id INT PRIMARY KEY AUTO_INCREMENT,
+    seller_id INT NOT NULL,
+    warehouse_id INT NOT NULL,
+    start_date DATE NOT NULL,
+    end_date DATE,
+    status ENUM('active', 'completed', 'cancelled') DEFAULT 'active',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+    FOREIGN KEY (seller_id) REFERENCES sellers(user_id) ON DELETE CASCADE,
+    FOREIGN KEY (warehouse_id) REFERENCES warehouses(warehouse_id) ON DELETE CASCADE
+);
+`)
+
+
   } catch (error: any) {
     console.error("DB Initialization Error:", error.message);
   }

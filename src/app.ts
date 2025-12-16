@@ -5,6 +5,10 @@ import { productRouter } from "./modules/products/products.routers";
 import { warehouseRouter } from "./modules/warehouses/warehouse.routes";
 import { inventoryRouter } from "./modules/inventory/inventory.routers";
 import { bidsRouter } from "./modules/bid/bids.route";
+import { transactionsRouter } from "./modules/transactions/transactions.router";
+import { notificationsRouter } from "./modules/notifications/notifications.route";
+import { rentRouter } from "./modules/rents/rent.routes";
+import { authRouter } from "./modules/auth/auth.routes";
 
 export const app = express();
 app.use(express.json());
@@ -29,6 +33,18 @@ app.use("/api/v1/inventories", inventoryRouter);
 
 // bid CRUD
 app.use("/api/v1/bids", bidsRouter);
+
+// transactions CRUD
+app.use("/api/v1/transactions", transactionsRouter);
+
+// notifications CRUD
+app.use("/api/v1/notifications", notificationsRouter);
+
+// rents CRUD
+app.use("/api/v1/notifications", rentRouter);
+
+// auth
+app.use("/api/v1/auth", authRouter);
 
 app.use((req: Request, res: Response) => {
   res.status(404).json({
