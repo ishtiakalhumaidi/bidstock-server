@@ -27,7 +27,7 @@ const getBids = async (req: Request, res: Response) => {
     return res.status(200).json({
       success: true,
       message: "bids retrieved successfully",
-      data: result[0],
+      data: result,
     });
   } catch (error: any) {
     console.error("error:", error);
@@ -36,6 +36,21 @@ const getBids = async (req: Request, res: Response) => {
       success: false,
       message: error.message,
     });
+  }
+};
+const getMyBids = async (req: Request, res: Response) => {
+  try {
+    if (!req.user) return res.status(401).json({ message: "Unauthorized" });
+    
+    const result = await bidsService.getMyBids(req.user.user_id as string);
+
+    return res.status(200).json({
+      success: true,
+      message: "My bids retrieved successfully",
+      data: result,
+    });
+  } catch (error: any) {
+    return res.status(500).json({ success: false, message: error.message });
   }
 };
 
@@ -113,4 +128,5 @@ export const bidsController = {
   getSingleBid,
   updateBid,
   deleteBid,
+  getMyBids
 };

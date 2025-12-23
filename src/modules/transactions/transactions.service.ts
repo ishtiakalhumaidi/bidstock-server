@@ -57,20 +57,7 @@ const getSingleTransaction = async (id: string) => {
   );
   return result;
 };
-const getMyTransactions = async (
-  role: string,
-  id: string
-) => {
-  const result = await pool.query(
-    `SELECT * FROM transactions
-     WHERE (from_role=? AND from_id=?)
-        OR (to_role=? AND to_id=?)
-     ORDER BY transaction_time DESC`,
-    [role, id, role, id]
-  );
 
-  return result;
-};
 
 
 const updateTransaction = async (
@@ -98,6 +85,31 @@ const updateTransaction = async (
   if (result.affectedRows === 0) {
     throw new Error("no transaction found to update");
   }
+
+  return result;
+};
+const getMyTransactions = async (
+  role: string,
+  id: string
+) => {
+  const [result] = await pool.query(
+    `SELECT 
+      t.*,
+      p.name as product_name,
+      p.image_url,
+      u.name as counterparty_name
+     FROM transactions t
+     LEFT JOIN bids b ON t.bid_id = b.bid_id
+     LEFT JOIN products p ON b.product_id = p.product_id
+     LEFT JOIN users u ON (
+        (t.from_id = u.user_id AND t.from_role != ?) OR 
+        (t.to_id = u.user_id AND t.to_role != ?)
+     )
+     WHERE (t.from_role=? AND t.from_id=?)
+        OR (t.to_role=? AND t.to_id=?)
+     ORDER BY t.transaction_time DESC`,
+    [role, role, role, id, role, id]
+  );
 
   return result;
 };

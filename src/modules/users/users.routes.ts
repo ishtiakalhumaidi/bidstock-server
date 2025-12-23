@@ -4,6 +4,7 @@ import auth from "../../middleware/auth";
 
 const router = Router();
 
+router.get("/dashboard-stats", auth(), userController.getDashboardStats);
 router.get("/", auth("admin"), userController.getUsers);
 router.get("/:user_id", auth(), userController.getSingleUser);
 router.put("/:user_id", auth(), userController.updateUser);

@@ -13,12 +13,58 @@ const addBid = async (payload: Record<string, unknown>) => {
 };
 
 const getBids = async () => {
-  const [result] = await pool.query(`SELECT * FROM bids`);
+  const [result] = await pool.query(`
+    SELECT 
+      b.*,
+      p.name as product_name,
+      p.image_url,
+      p.price as base_price,
+      p.description,
+      u.name as seller_name,
+      (SELECT MAX(offered_price) FROM offers WHERE bid_id = b.bid_id) as highest_bid
+    FROM bids b
+    JOIN products p ON b.product_id = p.product_id
+    JOIN users u ON b.seller_id = u.user_id
+    WHERE b.status = 'open'
+    ORDER BY b.end_time ASC
+  `);
   return result;
 };
 
 const getSingleBid = async (id: string) => {
-  const result = await pool.query(`SELECT * FROM bids WHERE bid_id=?`, [id]);
+  const [result] = await pool.query(
+    `
+    SELECT 
+      b.*,
+      p.name as product_name,
+      p.image_url,
+      p.description,
+      p.price as base_price,
+      u.name as seller_name,
+      (SELECT MAX(offered_price) FROM offers WHERE bid_id = b.bid_id) as highest_bid
+    FROM bids b
+    JOIN products p ON b.product_id = p.product_id
+    JOIN users u ON b.seller_id = u.user_id
+    WHERE b.bid_id=?`,
+    [id]
+  );
+  return result;
+};
+
+const getMyBids = async (seller_id: string) => {
+  const [result] = await pool.query(`
+    SELECT 
+      b.*,
+      p.name as product_name,
+      p.image_url,
+      p.price as base_price,
+      (SELECT COUNT(*) FROM offers WHERE bid_id = b.bid_id) as offer_count,
+      (SELECT MAX(offered_price) FROM offers WHERE bid_id = b.bid_id) as highest_bid
+    FROM bids b
+    JOIN products p ON b.product_id = p.product_id
+    WHERE b.seller_id = ?
+    ORDER BY b.bid_id DESC  -- Changed from created_at to bid_id
+  `, [seller_id]);
   return result;
 };
 
@@ -43,4 +89,11 @@ const deleteBid = async (id: string) => {
   return result;
 };
 
-export const bidsService = { addBid, getBids, getSingleBid, updateBid, deleteBid };
+export const bidsService = {
+  addBid,
+  getBids,
+  getSingleBid,
+  updateBid,
+  deleteBid,
+  getMyBids,
+};

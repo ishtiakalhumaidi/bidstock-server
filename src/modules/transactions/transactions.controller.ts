@@ -64,7 +64,6 @@ const getSingleTransaction = async (req: Request, res: Response) => {
 
 const getMyTransactions = async (req: Request, res: Response) => {
   try {
-    // 1. Check Auth
     if (!req.user) {
       return res.status(401).json({
         success: false,
@@ -82,7 +81,7 @@ const getMyTransactions = async (req: Request, res: Response) => {
     return res.status(200).json({
       success: true,
       message: "my transactions retrieved successfully",
-      data: result[0],
+      data: result,
     });
   } catch (error: any) {
     console.error("error:", error);

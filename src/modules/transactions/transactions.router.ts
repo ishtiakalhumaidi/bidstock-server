@@ -19,7 +19,7 @@ router.post("/", auth(), transactionsController.addTransaction);
 
 router.put(
   "/:transaction_id",
-  auth("admin"),
+  auth(),
   transactionsController.updateTransaction
 );
 

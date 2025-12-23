@@ -10,7 +10,6 @@ const addInventory = async (payload: Record<string, unknown>) => {
     max_stock_level 
   } = payload;
 
-  // Check if seller has rented this warehouse
   const [productRows] = await pool.query(
     `SELECT seller_id FROM products WHERE product_id = ?`,
     [product_id]

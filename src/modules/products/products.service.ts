@@ -51,7 +51,6 @@ const getProducts = async () => {
 };
 
 const getSingleProduct = async (product_id: string) => {
-  // Get product with inventory details
   const result = await pool.query(
     `SELECT 
   p.*,

@@ -38,7 +38,7 @@ app.use("/api/v1/inventories", inventoryRouter);
 app.use("/api/v1/bids", bidsRouter);
 
 // offers CRUD
-app.use("/api/v1/bids", offersRouter);
+app.use("/api/v1/offers", offersRouter);
 
 // transactions CRUD
 app.use("/api/v1/transactions", transactionsRouter);
