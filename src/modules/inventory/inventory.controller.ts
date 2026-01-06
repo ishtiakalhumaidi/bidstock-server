@@ -3,15 +3,12 @@ import { inventoryService } from "./inventory.service";
 
 const addInventory = async (req: Request, res: Response) => {
   try {
-    const user = req.user
-    if (!user){
-      return res.status(401).json({
-        success: false,
-        message: "Unauthorized",
-      });
+    const seller_id = (req as any).user.user_id || (req as any).user.id;
+
+    if (!seller_id) {
+      throw new Error("Unauthorized: User ID missing");
     }
-    
-    const result = await inventoryService.addInventory(req.body);
+    const result = await inventoryService.addInventory(req.body, seller_id);
 
     return res.status(201).json({
       success: true,
@@ -52,7 +49,9 @@ const getMyInventory = async (req: Request, res: Response) => {
       return res.status(401).json({ success: false, message: "Unauthorized" });
     }
 
-    const result = await inventoryService.getMyInventory(req.user.user_id as string);
+    const result = await inventoryService.getMyInventory(
+      req.user.user_id as string
+    );
 
     return res.status(200).json({
       success: true,

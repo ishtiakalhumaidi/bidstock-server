@@ -68,6 +68,22 @@ const acceptOffer = async (req: Request, res: Response) => {
   }
 };
 
+const getMyOffers = async (req: Request, res: Response) => {
+  try {
+    if (!req.user) return res.status(401).json({ message: "Unauthorized" });
+    
+    const result = await offersService.getMyOffers(req.user.user_id as string);
+
+    return res.status(200).json({
+      success: true,
+      message: "My offers retrieved successfully",
+      data: result,
+    });
+  } catch (error: any) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
 const updateOffer = async (req: Request, res: Response) => {
   try {
     const { offer_id } = req.params;
@@ -92,6 +108,6 @@ export const offersController = { addOffer,
   getOffers, 
   getBidOffers, 
   acceptOffer, 
-  getSingleOffer, 
+  getSingleOffer, getMyOffers,
   updateOffer, 
   deleteOffer};

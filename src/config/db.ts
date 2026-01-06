@@ -64,6 +64,7 @@ export const initialDB = async () => {
   category VARCHAR(100),
   brand VARCHAR(100),
   weight DECIMAL(10, 2),
+  size DECIMAL(10, 2) DEFAULT 0,
   image_url VARCHAR(500),
   status ENUM('active', 'inactive', 'discontinued') DEFAULT 'active',
   rating DECIMAL(3, 2) DEFAULT 0.00,

@@ -4,6 +4,7 @@ import auth from "../../middleware/auth";
 
 const router = Router();
 
+router.get("/my-offers", auth("buyer"), offersController.getMyOffers);
 router.get("/", offersController.getOffers);
 router.get(
   "/bid/:bid_id",

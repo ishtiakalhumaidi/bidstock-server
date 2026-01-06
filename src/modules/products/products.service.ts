@@ -12,14 +12,14 @@ const addProduct = async (
     category,
     brand,
     weight,
+    size, 
     image_url,
     status,
   } = payload;
 
-  // NO quantity field here - it's calculated from inventory!
   const [result] = await pool.query<ResultSetHeader>(
-    `INSERT INTO products(seller_id, name, description, price, category, brand, weight, image_url, status) 
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO products(seller_id, name, description, price, category, brand, weight, size, image_url, status) 
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       seller_id,
       name,
@@ -28,6 +28,7 @@ const addProduct = async (
       category,
       brand,
       weight,
+      size, 
       image_url,
       status || "active",
     ]
@@ -37,7 +38,6 @@ const addProduct = async (
 };
 
 const getProducts = async () => {
-  // Get products with their total inventory across all warehouses
   const result = await pool.query(`
     SELECT 
       p.*,
@@ -53,20 +53,20 @@ const getProducts = async () => {
 const getSingleProduct = async (product_id: string) => {
   const result = await pool.query(
     `SELECT 
-  p.*,
-  COALESCE(SUM(i.quantity), 0) as available_quantity,
-  CONCAT('[', GROUP_CONCAT(
-    JSON_OBJECT(
-      'warehouse_id', i.warehouse_id,
-      'quantity', i.quantity,
-      'warehouse_location', w.location
-    )
-  ), ']') as inventory_details
-FROM products p
-LEFT JOIN inventory i ON p.product_id = i.product_id
-LEFT JOIN warehouses w ON i.warehouse_id = w.warehouse_id
-WHERE p.product_id = ?
-GROUP BY p.product_id`,
+      p.*,
+      COALESCE(SUM(i.quantity), 0) as available_quantity,
+      CONCAT('[', GROUP_CONCAT(
+        JSON_OBJECT(
+          'warehouse_id', i.warehouse_id,
+          'quantity', i.quantity,
+          'warehouse_location', w.location
+        )
+      ), ']') as inventory_details
+    FROM products p
+    LEFT JOIN inventory i ON p.product_id = i.product_id
+    LEFT JOIN warehouses w ON i.warehouse_id = w.warehouse_id
+    WHERE p.product_id = ?
+    GROUP BY p.product_id`,
     [product_id]
   );
 
@@ -99,14 +99,15 @@ const updateProduct = async (
     category,
     brand,
     weight,
+    size, 
     image_url,
     status,
   } = payload;
 
-  // NO quantity update here!
+  // Added size=? to query
   const [result] = await pool.query<ResultSetHeader>(
     `UPDATE products 
-     SET name=?, description=?, price=?, category=?, brand=?, weight=?, image_url=?, status=? 
+     SET name=?, description=?, price=?, category=?, brand=?, weight=?, size=?, image_url=?, status=? 
      WHERE product_id = ?`,
     [
       name,
@@ -115,6 +116,7 @@ const updateProduct = async (
       category,
       brand,
       weight,
+      size,
       image_url,
       status,
       product_id,

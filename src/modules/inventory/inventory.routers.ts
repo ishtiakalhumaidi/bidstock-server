@@ -15,7 +15,7 @@ router.get(
   inventoryController.getSingleInventory
 );
 
-router.post("/", auth("seller"), inventoryController.addInventory);
+router.post("/add", auth("seller"), inventoryController.addInventory);
 
 router.put(
   "/:product_id/:warehouse_id",
