@@ -72,7 +72,6 @@ const getMyRents = async (req: Request, res: Response) => {
     }
 
     const seller_id = req.user.user_id;
-  console.log(seller_id)
     const result = await rentService.getMyRents(seller_id as string);
 
     return res.status(200).json({

@@ -74,7 +74,6 @@ const getSellerProducts = async (req: Request, res: Response) => {
       });
     }
     const { user_id } = req.user as JwtPayload;
-    console.log(user_id)
 
     const products = await productService.getSellerProducts(user_id as string);
 

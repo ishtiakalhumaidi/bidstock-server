@@ -104,7 +104,6 @@ const updateProduct = async (
     status,
   } = payload;
 
-  // Added size=? to query
   const [result] = await pool.query<ResultSetHeader>(
     `UPDATE products 
      SET name=?, description=?, price=?, category=?, brand=?, weight=?, size=?, image_url=?, status=? 

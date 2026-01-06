@@ -41,7 +41,6 @@ const getWarehouses = async (req: Request, res: Response) => {
 const getMyWarehouses = async (req: Request, res: Response) => {
   try {
     const user = req.user as JwtPayload
-    console.log(user);
     const result = await warehouseService.getMyWarehouses(req.user?.user_id as string);
 
     return res.status(200).json({

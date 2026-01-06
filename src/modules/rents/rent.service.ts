@@ -32,7 +32,6 @@ const addRent = async (payload: Record<string, unknown>) => {
     throw new Error("Warehouse is currently under maintenance");
   }
 
-  // 4. Check for overlapping active rents
   const [overlapCheck] = await pool.query(
     `SELECT rent_id FROM rents 
      WHERE warehouse_id = ? 
@@ -54,7 +53,7 @@ const addRent = async (payload: Record<string, unknown>) => {
     throw new Error("Warehouse is already rented for this period");
   }
 
-  // 5. Insert rent
+
   const [result] = await pool.query<ResultSetHeader>(
     `INSERT INTO rents(
       seller_id,
