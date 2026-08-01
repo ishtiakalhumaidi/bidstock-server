@@ -1,6 +1,7 @@
 import type { NextFunction, Request, Response } from "express";
-import Jwt, { type JwtPayload } from "jsonwebtoken";
+import Jwt from "jsonwebtoken";
 import config from "../config";
+import type { CustomJwtPayload } from "../types/index";
 
 const auth = (...roles: string[]) => {
   return (req: Request, res: Response, next: NextFunction) => {
@@ -23,14 +24,22 @@ const auth = (...roles: string[]) => {
       }
 
       const token = parts[1];
+
+      if (!token) {
+        return res.status(401).json({
+          success: false,
+          message: "unauthorized: token missing",
+        });
+      }
+
       const decoded = Jwt.verify(
-        token as string,
-        config.jwt_secret as string
-      ) as JwtPayload;
+        token,
+        config.jwt_secret as string,
+      ) as CustomJwtPayload;
 
       req.user = decoded;
 
-      // role checking
+      // Role checking with type safety
       if (roles.length > 0 && !roles.includes(decoded.role)) {
         return res.status(403).json({
           success: false,
@@ -38,11 +47,12 @@ const auth = (...roles: string[]) => {
         });
       }
 
-      next();
-    } catch (error: any) {
-      res.status(401).json({
+      return next();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      return res.status(401).json({
         success: false,
-        message: `unauthorized: ${error.message}`,
+        message: `unauthorized: ${message}`,
       });
     }
   };

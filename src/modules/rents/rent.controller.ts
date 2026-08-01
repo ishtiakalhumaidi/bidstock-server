@@ -1,175 +1,242 @@
 import type { Request, Response } from "express";
 import { rentService } from "./rent.service";
-import { pool } from "../../config/db";
 
 const addRent = async (req: Request, res: Response) => {
   try {
-    const result = await rentService.addRent(req.body);
+    if (!req.user) {
+      return res.status(401).json({ success: false, message: "Unauthorized" });
+    }
+
+    const result = await rentService.addRent(
+      req.body,
+      req.user.user_id as number,
+    );
 
     return res.status(201).json({
       success: true,
-      message: "rent added successfully",
+      message: "Rent created successfully",
       data: { rent_id: result },
     });
   } catch (error: any) {
-    console.error("error:", error);
+    console.error("Add rent error:", error.message);
 
-    return res.status(500).json({
-      success: false,
-      message: error.message,
-    });
+    if (
+      error.message.includes("required") ||
+      error.message.includes("must be") ||
+      error.message.includes("cannot be")
+    ) {
+      return res.status(400).json({ success: false, message: error.message });
+    }
+    if (error.message.includes("not found")) {
+      return res.status(404).json({ success: false, message: error.message });
+    }
+    if (
+      error.message.includes("already rented") ||
+      error.message.includes("maintenance")
+    ) {
+      return res.status(409).json({ success: false, message: error.message });
+    }
+
+    return res
+      .status(500)
+      .json({ success: false, message: "Failed to create rent" });
   }
 };
 
 const getRents = async (req: Request, res: Response) => {
   try {
-    const result = await rentService.getRents();
+    if (!req.user) {
+      return res.status(401).json({ success: false, message: "Unauthorized" });
+    }
+
+    const result = await rentService.getRents(req.user.role as string);
 
     return res.status(200).json({
       success: true,
-      message: "rents retrieved successfully",
-      data: result[0],
+      message: "Rents retrieved successfully",
+      data: result,
     });
   } catch (error: any) {
-    console.error("error:", error);
-
-    return res.status(500).json({
-      success: false,
-      message: error.message,
-    });
+    console.error("Get rents error:", error.message);
+    if (error.message.includes("Forbidden")) {
+      return res.status(403).json({ success: false, message: error.message });
+    }
+    return res
+      .status(500)
+      .json({ success: false, message: "Failed to retrieve rents" });
   }
 };
 
 const getSingleRent = async (req: Request, res: Response) => {
   try {
-    const { rent_id } = req.params;
+    if (!req.user) {
+      return res.status(401).json({ success: false, message: "Unauthorized" });
+    }
 
-    const result = await rentService.getSingleRent(rent_id as string);
+    const { rent_id } = req.params;
+    const result = await rentService.getSingleRent(
+      rent_id as string,
+      req.user.user_id as number,
+      req.user.role as string,
+    );
 
     return res.status(200).json({
       success: true,
-      message: "rent retrieved successfully",
-      data: result[0],
+      message: "Rent retrieved successfully",
+      data: result,
     });
   } catch (error: any) {
-    console.error("error:", error);
-
-    return res.status(500).json({
-      success: false,
-      message: error.message,
-    });
+    console.error("Get single rent error:", error.message);
+    if (
+      error.message.includes("Forbidden") ||
+      error.message.includes("Unauthorized")
+    ) {
+      return res.status(403).json({ success: false, message: error.message });
+    }
+    if (error.message.includes("not found")) {
+      return res.status(404).json({ success: false, message: error.message });
+    }
+    return res
+      .status(500)
+      .json({ success: false, message: "Failed to retrieve rent" });
   }
 };
-
 
 const getMyRents = async (req: Request, res: Response) => {
   try {
     if (!req.user) {
-      return res.status(401).json({
-        success: false,
-        message: "Unauthorized",
-      });
+      return res.status(401).json({ success: false, message: "Unauthorized" });
     }
 
-    const seller_id = req.user.user_id;
-    const result = await rentService.getMyRents(seller_id as string);
+    const result = await rentService.getMyRents(String(req.user.user_id));
 
     return res.status(200).json({
       success: true,
-      message: "my rents retrieved successfully",
-      data: result[0],
+      message: "My rents retrieved successfully",
+      data: result,
     });
   } catch (error: any) {
-    console.error("error:", error);
-
-    return res.status(500).json({
-      success: false,
-      message: error.message,
-    });
+    console.error("Get my rents error:", error.message);
+    return res
+      .status(500)
+      .json({ success: false, message: "Failed to retrieve rents" });
   }
 };
 
-
 const getWarehouseRents = async (req: Request, res: Response) => {
   try {
-    const { warehouse_id } = req.params;
-
     if (!req.user) {
-      return res.status(401).json({
-        success: false,
-        message: "Unauthorized",
-      });
+      return res.status(401).json({ success: false, message: "Unauthorized" });
     }
 
-    // Verify the user owns this warehouse
-    if (req.user.role === "warehouse_owner") {
-      const [warehouseCheck] = await pool.query(
-        `SELECT warehouse_id FROM warehouses WHERE warehouse_id = ? AND owner_id = ?`,
-        [warehouse_id, req.user.user_id]
-      );
-
-      if ((warehouseCheck as any[]).length === 0) {
-        return res.status(403).json({
-          success: false,
-          message: "You don't own this warehouse",
-        });
-      }
-    }
-
-    const result = await rentService.getWarehouseRents(warehouse_id as string);
+    const { warehouse_id } = req.params;
+    const result = await rentService.getWarehouseRents(
+      warehouse_id as string,
+      req.user.user_id as number,
+      req.user.role as string,
+    );
 
     return res.status(200).json({
       success: true,
-      message: "warehouse rents retrieved successfully",
-      data: result[0],
+      message: "Warehouse rents retrieved successfully",
+      data: result,
     });
   } catch (error: any) {
-    console.error("error:", error);
-
-    return res.status(500).json({
-      success: false,
-      message: error.message,
-    });
+    console.error("Get warehouse rents error:", error.message);
+    if (
+      error.message.includes("Forbidden") ||
+      error.message.includes("Unauthorized")
+    ) {
+      return res.status(403).json({ success: false, message: error.message });
+    }
+    if (error.message.includes("not found")) {
+      return res.status(404).json({ success: false, message: error.message });
+    }
+    return res
+      .status(500)
+      .json({ success: false, message: "Failed to retrieve rents" });
   }
 };
 
 const updateRent = async (req: Request, res: Response) => {
   try {
-    const { rent_id } = req.params;
+    if (!req.user) {
+      return res.status(401).json({ success: false, message: "Unauthorized" });
+    }
 
-    await rentService.updateRent(req.body, rent_id as string);
+    const { rent_id } = req.params;
+    await rentService.updateRent(
+      req.body,
+      rent_id as string,
+      req.user.user_id as number,
+      req.user.role as string,
+    );
 
     return res.status(200).json({
       success: true,
-      message: "rent updated successfully",
+      message: "Rent updated successfully",
     });
   } catch (error: any) {
-    console.error("error:", error);
-
-    return res.status(500).json({
-      success: false,
-      message: error.message,
-    });
+    console.error("Update rent error:", error.message);
+    if (
+      error.message.includes("Forbidden") ||
+      error.message.includes("Unauthorized")
+    ) {
+      return res.status(403).json({ success: false, message: error.message });
+    }
+    if (error.message.includes("not found")) {
+      return res.status(404).json({ success: false, message: error.message });
+    }
+    if (
+      error.message.includes("conflict") ||
+      error.message.includes("must be") ||
+      error.message.includes("Cannot update")
+    ) {
+      return res.status(400).json({ success: false, message: error.message });
+    }
+    return res
+      .status(500)
+      .json({ success: false, message: "Failed to update rent" });
   }
 };
 
 const deleteRent = async (req: Request, res: Response) => {
   try {
-    const { rent_id } = req.params;
+    if (!req.user) {
+      return res.status(401).json({ success: false, message: "Unauthorized" });
+    }
 
-    await rentService.deleteRent(rent_id as string);
+    const { rent_id } = req.params;
+    await rentService.deleteRent(
+      rent_id as string,
+      req.user.user_id as number,
+      req.user.role as string,
+    );
 
     return res.status(200).json({
       success: true,
-      message: "rent deleted successfully",
+      message: "Rent deleted successfully",
     });
   } catch (error: any) {
-    console.error("error:", error);
-
-    return res.status(500).json({
-      success: false,
-      message: error.message,
-    });
+    console.error("Delete rent error:", error.message);
+    if (
+      error.message.includes("Forbidden") ||
+      error.message.includes("Unauthorized")
+    ) {
+      return res.status(403).json({ success: false, message: error.message });
+    }
+    if (error.message.includes("not found")) {
+      return res.status(404).json({ success: false, message: error.message });
+    }
+    if (
+      error.message.includes("Cannot delete") ||
+      error.message.includes("inventory")
+    ) {
+      return res.status(400).json({ success: false, message: error.message });
+    }
+    return res
+      .status(500)
+      .json({ success: false, message: "Failed to delete rent" });
   }
 };
 

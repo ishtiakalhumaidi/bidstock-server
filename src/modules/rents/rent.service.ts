@@ -1,58 +1,89 @@
-import type { ResultSetHeader } from "mysql2";
+import type { ResultSetHeader, RowDataPacket } from "mysql2/promise";
 import { pool } from "../../config/db";
 
-const addRent = async (payload: Record<string, unknown>) => {
-  const { seller_id, warehouse_id, start_date, end_date } = payload;
+interface WarehouseRow extends RowDataPacket {
+  warehouse_id: number;
+  owner_id: number;
+  capacity: number;
+  status: string;
+  price_per_day: number;
+}
 
-  const [sellerCheck] = await pool.query(
-    `SELECT user_id FROM sellers WHERE user_id = ?`,
-    [seller_id]
-  );
+interface RentRow extends RowDataPacket {
+  rent_id: number;
+  seller_id: number;
+  warehouse_id: number;
+  start_date: string;
+  end_date: string | null;
+  status: string;
+  rental_price: number | null;
+}
 
-  if ((sellerCheck as any[]).length === 0) {
-    throw new Error("Seller not found");
+const calculateDays = (start: string, end: string | null): number => {
+  const startDate = new Date(start);
+  const endDate = end ? new Date(end) : new Date(startDate);
+  endDate.setDate(endDate.getDate() + 30); // Default 30 days if no end_date
+  const diffTime = endDate.getTime() - startDate.getTime();
+  return Math.max(1, Math.ceil(diffTime / (1000 * 60 * 60 * 24)));
+};
+
+const addRent = async (payload: Record<string, unknown>, user_id: number) => {
+  const { warehouse_id, start_date, end_date } = payload;
+
+  if (!warehouse_id || !start_date) {
+    throw new Error("warehouse_id and start_date are required");
   }
 
-  const [warehouseCheck] = await pool.query(
-    `SELECT warehouse_id, capacity, status FROM warehouses WHERE warehouse_id = ?`,
+  // Validate dates
+  const start = new Date(start_date as string);
+  const now = new Date();
+  now.setHours(0, 0, 0, 0);
+  if (start < now) {
+    throw new Error("Start date cannot be in the past");
+  }
+
+  if (end_date) {
+    const end = new Date(end_date as string);
+    if (end <= start) {
+      throw new Error("End date must be after start date");
+    }
+  }
+
+  // Verify warehouse exists and is available
+  const [warehouseRows] = await pool.query<WarehouseRow[]>(
+    `SELECT warehouse_id, owner_id, capacity, status, price_per_day 
+     FROM warehouses WHERE warehouse_id = ?`,
     [warehouse_id]
   );
 
-  if ((warehouseCheck as any[]).length === 0) {
+  if (warehouseRows.length === 0) {
     throw new Error("Warehouse not found");
   }
 
-  const warehouse = (warehouseCheck as any[])[0];
+  const warehouse = warehouseRows[0]!;
 
-  if (warehouse.status === 'booked') {
-    throw new Error("Warehouse is already fully booked");
-  }
-  
   if (warehouse.status === 'maintenance') {
     throw new Error("Warehouse is currently under maintenance");
   }
 
-  const [overlapCheck] = await pool.query(
+  // Check for date overlap with ANY active rent for this warehouse
+  const [overlapRows] = await pool.query<RowDataPacket[]>(
     `SELECT rent_id FROM rents 
      WHERE warehouse_id = ? 
      AND status = 'active'
      AND (
        (start_date <= ? AND (end_date IS NULL OR end_date >= ?))
-       OR (start_date <= ? AND (end_date IS NULL OR end_date >= ?))
-       OR (start_date >= ? AND start_date <= ?)
      )`,
-    [
-      warehouse_id,
-      start_date, start_date,
-      end_date || '9999-12-31', end_date || '9999-12-31',
-      start_date, end_date || '9999-12-31'
-    ]
+    [warehouse_id, end_date || '9999-12-31', start_date]
   );
 
-  if ((overlapCheck as any[]).length > 0) {
+  if (overlapRows.length > 0) {
     throw new Error("Warehouse is already rented for this period");
   }
 
+  // Calculate rental price
+  const days = calculateDays(start_date as string, end_date as string | null);
+  const rentalPrice = parseFloat(String(warehouse.price_per_day || 0)) * days;
 
   const [result] = await pool.query<ResultSetHeader>(
     `INSERT INTO rents(
@@ -60,12 +91,14 @@ const addRent = async (payload: Record<string, unknown>) => {
       warehouse_id,
       start_date,
       end_date,
+      rental_price,
       status
-    ) VALUES (?,?,?,?,?)`,
-    [seller_id, warehouse_id, start_date, end_date ?? null, 'active']
+    ) VALUES (?,?,?,?,?,?)`,
+    [user_id, warehouse_id, start_date, end_date ?? null, rentalPrice, 'active']
   );
 
-  await pool.query(
+  // Mark warehouse as booked
+  await pool.query<ResultSetHeader>(
     `UPDATE warehouses SET status = 'booked' WHERE warehouse_id = ?`,
     [warehouse_id]
   );
@@ -73,48 +106,69 @@ const addRent = async (payload: Record<string, unknown>) => {
   return result.insertId;
 };
 
-const getRents = async () => {
-  const result = await pool.query(`
+const getRents = async (user_role: string) => {
+  if (user_role !== 'admin' && user_role !== 'warehouse_owner') {
+    throw new Error("Forbidden: Admin or warehouse owner access required");
+  }
+
+  const [rows] = await pool.query<RowDataPacket[]>(`
     SELECT 
       r.*,
       u.name as seller_name,
       u.email as seller_email,
       w.location as warehouse_location,
-      w.capacity as warehouse_capacity
+      w.capacity as warehouse_capacity,
+      w.price_per_day
     FROM rents r
     JOIN sellers s ON r.seller_id = s.user_id
     JOIN users u ON s.user_id = u.user_id
     JOIN warehouses w ON r.warehouse_id = w.warehouse_id
     ORDER BY r.created_at DESC
+    LIMIT 200
   `);
-  return result;
+  return rows;
 };
 
-const getSingleRent = async (rent_id: string) => {
-  const result = await pool.query(
+const getSingleRent = async (rent_id: string, user_id: number, user_role: string) => {
+  const [rows] = await pool.query<RowDataPacket[]>(
     `SELECT 
       r.*,
       u.name as seller_name,
       u.email as seller_email,
       u.phone as seller_phone,
       w.location as warehouse_location,
-      w.capacity as warehouse_capacity
+      w.capacity as warehouse_capacity,
+      w.owner_id,
+      w.price_per_day
     FROM rents r
     JOIN sellers s ON r.seller_id = s.user_id
     JOIN users u ON s.user_id = u.user_id
     JOIN warehouses w ON r.warehouse_id = w.warehouse_id
-    WHERE r.rent_id=?`,
+    WHERE r.rent_id = ?`,
     [rent_id]
   );
-  return result;
+
+  if (rows.length === 0) throw new Error("Rent not found");
+
+  const rent = rows[0] as any;
+  const isSeller = rent.seller_id === user_id;
+  const isOwner = rent.owner_id === user_id;
+  const isAdmin = user_role === 'admin';
+
+  if (!isSeller && !isOwner && !isAdmin) {
+    throw new Error("Forbidden: You do not have permission to view this rent");
+  }
+
+  return rent;
 };
 
 const getMyRents = async (seller_id: string) => {
-  const result = await pool.query(
+  const [rows] = await pool.query<RowDataPacket[]>(
     `SELECT 
       r.*,
       w.location as warehouse_location,
       w.capacity as warehouse_capacity,
+      w.price_per_day,
       wo.user_id as owner_id,
       u.name as owner_name,
       u.email as owner_email,
@@ -123,15 +177,29 @@ const getMyRents = async (seller_id: string) => {
     JOIN warehouses w ON r.warehouse_id = w.warehouse_id
     JOIN warehouse_owners wo ON w.owner_id = wo.user_id
     JOIN users u ON wo.user_id = u.user_id
-    WHERE r.seller_id=? 
+    WHERE r.seller_id = ? 
     ORDER BY r.start_date DESC`,
     [seller_id]
   );
-  return result;
+  return rows;
 };
 
-const getWarehouseRents = async (warehouse_id: string) => {
-  const result = await pool.query(
+const getWarehouseRents = async (warehouse_id: string, user_id: number, user_role: string) => {
+  // Verify ownership
+  const [whRows] = await pool.query<RowDataPacket[]>(
+    `SELECT owner_id FROM warehouses WHERE warehouse_id = ?`,
+    [warehouse_id]
+  );
+  if (whRows.length === 0) throw new Error("Warehouse not found");
+
+  const isOwner = (whRows[0] as any).owner_id === user_id;
+  const isAdmin = user_role === 'admin';
+
+  if (!isOwner && !isAdmin) {
+    throw new Error("Forbidden: You do not own this warehouse");
+  }
+
+  const [rows] = await pool.query<RowDataPacket[]>(
     `SELECT 
       r.*,
       u.name as seller_name,
@@ -140,115 +208,175 @@ const getWarehouseRents = async (warehouse_id: string) => {
     FROM rents r
     JOIN sellers s ON r.seller_id = s.user_id
     JOIN users u ON s.user_id = u.user_id
-    WHERE r.warehouse_id=? 
+    WHERE r.warehouse_id = ? 
     ORDER BY r.start_date DESC`,
     [warehouse_id]
   );
-  return result;
+  return rows;
 };
 
 const updateRent = async (
   payload: Record<string, unknown>,
-  rent_id: string
+  rent_id: string,
+  user_id: number,
+  user_role: string
 ) => {
+  // Verify rent exists and get ownership
+  const [rentRows] = await pool.query<RentRow[]>(
+    `SELECT r.*, w.owner_id 
+     FROM rents r
+     JOIN warehouses w ON r.warehouse_id = w.warehouse_id
+     WHERE r.rent_id = ?`,
+    [rent_id]
+  );
+
+  if (rentRows.length === 0) throw new Error("Rent not found");
+  const rent = rentRows[0]!;
+
+  const isSeller = rent.seller_id === user_id;
+  const isOwner = rent.owner_id === user_id;
+  const isAdmin = user_role === 'admin';
+
+  if (!isSeller && !isOwner && !isAdmin) {
+    throw new Error("Forbidden: You do not have permission to update this rent");
+  }
+
+  // Sellers can only update their own pending/active rents
+  if (isSeller && !isAdmin && rent.status !== 'active' && rent.status !== 'pending') {
+    throw new Error("Cannot update a completed or cancelled rent");
+  }
+
   const { start_date, end_date, status } = payload;
 
+  // Validate dates if provided
   if (start_date || end_date) {
-    const [rentCheck] = await pool.query(
-      `SELECT warehouse_id, seller_id FROM rents WHERE rent_id = ?`,
-      [rent_id]
-    );
+    const newStart = start_date ? new Date(start_date as string) : new Date(rent.start_date);
+    const newEnd = end_date ? new Date(end_date as string) : (rent.end_date ? new Date(rent.end_date) : null);
 
-    if ((rentCheck as any[]).length === 0) {
-      throw new Error("Rent not found");
+    if (end_date && newEnd && newEnd <= newStart) {
+      throw new Error("End date must be after start date");
     }
 
-    const { warehouse_id, seller_id } = (rentCheck as any[])[0];
-
-    const [overlapCheck] = await pool.query(
+    // Check overlap with OTHER rents for same warehouse
+    const [overlapRows] = await pool.query<RowDataPacket[]>(
       `SELECT rent_id FROM rents 
        WHERE warehouse_id = ? 
-       AND seller_id = ?
        AND rent_id != ?
        AND status = 'active'
        AND (
          (start_date <= ? AND (end_date IS NULL OR end_date >= ?))
-         OR (start_date <= ? AND (end_date IS NULL OR end_date >= ?))
-         OR (start_date >= ? AND start_date <= ?)
        )`,
       [
-        warehouse_id,
-        seller_id,
+        rent.warehouse_id,
         rent_id,
-        start_date, start_date,
-        end_date || '9999-12-31', end_date || '9999-12-31',
-        start_date, end_date || '9999-12-31'
+        end_date || '9999-12-31',
+        start_date || rent.start_date
       ]
     );
 
-    if ((overlapCheck as any[]).length > 0) {
+    if (overlapRows.length > 0) {
       throw new Error("Updated dates conflict with existing rent");
     }
   }
 
+  // Calculate new rental price if dates changed
+  let newRentalPrice: number | null = null;
+  if (start_date || end_date) {
+    const days = calculateDays(
+      (start_date as string) || rent.start_date,
+      (end_date as string) || rent.end_date
+    );
+    const [whRows] = await pool.query<RowDataPacket[]>(
+      `SELECT price_per_day FROM warehouses WHERE warehouse_id = ?`,
+      [rent.warehouse_id]
+    );
+    const pricePerDay = parseFloat(String((whRows[0] as any)?.price_per_day || 0));
+    newRentalPrice = pricePerDay * days;
+  }
+
   const [result] = await pool.query<ResultSetHeader>(
     `UPDATE rents 
-     SET start_date=?, end_date=?, status=? 
-     WHERE rent_id=?`,
-    [start_date, end_date, status, rent_id]
+     SET start_date = COALESCE(?, start_date), 
+         end_date = COALESCE(?, end_date), 
+         status = COALESCE(?, status),
+         rental_price = COALESCE(?, rental_price)
+     WHERE rent_id = ?`,
+    [start_date ?? null, end_date ?? null, status ?? null, newRentalPrice, rent_id]
   );
 
   if (result.affectedRows === 0) {
-    throw new Error("no rent found to update");
+    throw new Error("No rent found to update");
   }
-  
+
+  // If completed or cancelled, free up warehouse if no other active rents
   if (status === 'completed' || status === 'cancelled') {
-      const [rentData] = await pool.query(`SELECT warehouse_id FROM rents WHERE rent_id=?`, [rent_id]);
-      if((rentData as any[]).length > 0) {
-          await pool.query(`UPDATE warehouses SET status='available' WHERE warehouse_id=?`, [(rentData as any[])[0].warehouse_id]);
-      }
+    const [activeRows] = await pool.query<RowDataPacket[]>(
+      `SELECT rent_id FROM rents WHERE warehouse_id = ? AND status = 'active' AND rent_id != ?`,
+      [rent.warehouse_id, rent_id]
+    );
+    if (activeRows.length === 0) {
+      await pool.query<ResultSetHeader>(
+        `UPDATE warehouses SET status = 'available' WHERE warehouse_id = ?`,
+        [rent.warehouse_id]
+      );
+    }
   }
 
   return result;
 };
 
-const deleteRent = async (rent_id: string) => {
-  const [rentData] = await pool.query(
-    `SELECT warehouse_id FROM rents WHERE rent_id = ?`, 
+const deleteRent = async (rent_id: string, user_id: number, user_role: string) => {
+  const [rentRows] = await pool.query<RentRow[]>(
+    `SELECT r.*, w.owner_id 
+     FROM rents r
+     JOIN warehouses w ON r.warehouse_id = w.warehouse_id
+     WHERE r.rent_id = ?`,
     [rent_id]
   );
-  
-  if ((rentData as any[]).length === 0) {
-      throw new Error("Rent not found");
+
+  if (rentRows.length === 0) throw new Error("Rent not found");
+  const rent = rentRows[0]!;
+
+  const isSeller = rent.seller_id === user_id;
+  const isOwner = rent.owner_id === user_id;
+  const isAdmin = user_role === 'admin';
+
+  if (!isSeller && !isOwner && !isAdmin) {
+    throw new Error("Forbidden: You do not have permission to delete this rent");
   }
-  const { warehouse_id } = (rentData as any[])[0];
 
-  const [inventoryCheck] = await pool.query(
-    `SELECT i.inventory_id 
-     FROM inventory i
-     JOIN rents r ON i.warehouse_id = r.warehouse_id
-     JOIN products p ON i.product_id = p.product_id
-     WHERE r.rent_id = ? AND p.seller_id = r.seller_id`,
-    [rent_id]
+  // Check for inventory in this warehouse by this seller
+  const [inventoryRows] = await pool.query<RowDataPacket[]>(
+    `SELECT inventory_id FROM inventory 
+     WHERE warehouse_id = ? AND product_id IN (SELECT product_id FROM products WHERE seller_id = ?)
+     AND quantity > 0`,
+    [rent.warehouse_id, rent.seller_id]
   );
 
-  if ((inventoryCheck as any[]).length > 0) {
-    throw new Error("Cannot delete rent: inventory exists for this warehouse. Please remove inventory first.");
+  if (inventoryRows.length > 0) {
+    throw new Error("Cannot delete rent: inventory still exists in this warehouse. Remove inventory first.");
   }
 
   const [result] = await pool.query<ResultSetHeader>(
-    `DELETE FROM rents WHERE rent_id=?`,
+    `DELETE FROM rents WHERE rent_id = ?`,
     [rent_id]
   );
 
   if (result.affectedRows === 0) {
-    throw new Error("no rent found to delete");
+    throw new Error("No rent found to delete");
   }
 
-  await pool.query(
-    `UPDATE warehouses SET status = 'available' WHERE warehouse_id = ?`,
-    [warehouse_id]
+  // Free up warehouse if no other active rents
+  const [activeRows] = await pool.query<RowDataPacket[]>(
+    `SELECT rent_id FROM rents WHERE warehouse_id = ? AND status = 'active'`,
+    [rent.warehouse_id]
   );
+  if (activeRows.length === 0) {
+    await pool.query<ResultSetHeader>(
+      `UPDATE warehouses SET status = 'available' WHERE warehouse_id = ?`,
+      [rent.warehouse_id]
+    );
+  }
 
   return result;
 };
@@ -261,4 +389,4 @@ export const rentService = {
   getWarehouseRents,
   updateRent,
   deleteRent,
-};
+};  

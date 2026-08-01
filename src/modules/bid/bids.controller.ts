@@ -1,56 +1,85 @@
 import type { Request, Response } from "express";
 import { bidsService } from "./bids.service";
 
+// Helper for type-safe error handling without 'any'
+const getErrorMessage = (error: unknown): string => {
+  if (error instanceof Error) return error.message;
+  return String(error);
+};
+
 const addBid = async (req: Request, res: Response) => {
   try {
-    const result = await bidsService.addBid(req.body);
+    if (!req.user) {
+      return res.status(401).json({ success: false, message: "Unauthorized" });
+    }
+
+    const result = await bidsService.addBid(req.body, req.user.user_id);
 
     return res.status(201).json({
       success: true,
-      message: "bid added successfully",
+      message: "Auction created successfully",
       data: { bid_id: result },
     });
-  } catch (error: any) {
-    console.error("error:", error);
+  } catch (error) {
+    const message = getErrorMessage(error);
+    console.error("Add bid error:", message);
+
+    if (message.includes("Unauthorized")) {
+      return res.status(403).json({ success: false, message });
+    }
+    if (
+      message.includes("required") ||
+      message.includes("must be") ||
+      message.includes("already has")
+    ) {
+      return res.status(400).json({ success: false, message });
+    }
+    if (message.includes("not found")) {
+      return res.status(404).json({ success: false, message });
+    }
 
     return res.status(500).json({
       success: false,
-      message: error.message,
+      message: "Failed to create auction",
     });
   }
 };
 
-const getBids = async (req: Request, res: Response) => {
+const getBids = async (_req: Request, res: Response) => {
   try {
     const result = await bidsService.getBids();
 
     return res.status(200).json({
       success: true,
-      message: "bids retrieved successfully",
+      message: "Auctions retrieved successfully",
       data: result,
     });
-  } catch (error: any) {
-    console.error("error:", error);
-
-    return res.status(500).json({
-      success: false,
-      message: error.message,
-    });
+  } catch (error) {
+    console.error("Get bids error:", getErrorMessage(error));
+    return res
+      .status(500)
+      .json({ success: false, message: "Failed to retrieve auctions" });
   }
 };
+
 const getMyBids = async (req: Request, res: Response) => {
   try {
-    if (!req.user) return res.status(401).json({ message: "Unauthorized" });
-    
-    const result = await bidsService.getMyBids(req.user.user_id as string);
+    if (!req.user) {
+      return res.status(401).json({ success: false, message: "Unauthorized" });
+    }
+
+    const result = await bidsService.getMyBids(req.user.user_id);
 
     return res.status(200).json({
       success: true,
-      message: "My bids retrieved successfully",
+      message: "My auctions retrieved successfully",
       data: result,
     });
-  } catch (error: any) {
-    return res.status(500).json({ success: false, message: error.message });
+  } catch (error) {
+    console.error("Get my bids error:", getErrorMessage(error));
+    return res
+      .status(500)
+      .json({ success: false, message: "Failed to retrieve auctions" });
   }
 };
 
@@ -58,67 +87,111 @@ const getSingleBid = async (req: Request, res: Response) => {
   try {
     const { bid_id } = req.params;
 
-    const result = await bidsService.getSingleBid(
-      bid_id as string
-    );
+    if (!bid_id) {
+      return res
+        .status(400)
+        .json({ success: false, message: "bid_id parameter is required" });
+    }
+
+    // result is typed as `BidRow | null`
+    const result = await bidsService.getSingleBid(bid_id);
+
+    if (!result) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Auction not found" });
+    }
 
     return res.status(200).json({
       success: true,
-      message: "bid retrieved successfully",
-      data: result[0],
+      message: "Auction retrieved successfully",
+      data: result,
     });
-  } catch (error: any) {
-    console.error("error:", error);
-
-    return res.status(500).json({
-      success: false,
-      message: error.message,
-    });
+  } catch (error) {
+    console.error("Get single bid error:", getErrorMessage(error));
+    return res
+      .status(500)
+      .json({ success: false, message: "Failed to retrieve auction" });
   }
 };
 
 const updateBid = async (req: Request, res: Response) => {
   try {
+    if (!req.user) {
+      return res.status(401).json({ success: false, message: "Unauthorized" });
+    }
+
     const { bid_id } = req.params;
 
-    await bidsService.updateBid(
-      req.body,
-      bid_id as string
-    );
+    if (!bid_id) {
+      return res
+        .status(400)
+        .json({ success: false, message: "bid_id parameter is required" });
+    }
+
+    await bidsService.updateBid(req.body, bid_id, req.user.user_id);
 
     return res.status(200).json({
       success: true,
-      message: "bid data updated successfully",
+      message: "Auction updated successfully",
     });
-  } catch (error: any) {
-    console.error("error:", error);
+  } catch (error) {
+    const message = getErrorMessage(error);
+    console.error("Update bid error:", message);
 
-    return res.status(500).json({
-      success: false,
-      message: error.message,
-    });
+    if (message.includes("Unauthorized")) {
+      return res.status(403).json({ success: false, message });
+    }
+    if (message.includes("closed")) {
+      return res.status(400).json({ success: false, message });
+    }
+    if (message.includes("not found")) {
+      return res.status(404).json({ success: false, message });
+    }
+
+    return res
+      .status(500)
+      .json({ success: false, message: "Failed to update auction" });
   }
 };
 
 const deleteBid = async (req: Request, res: Response) => {
   try {
+    if (!req.user) {
+      return res.status(401).json({ success: false, message: "Unauthorized" });
+    }
+
     const { bid_id } = req.params;
 
-    await bidsService.deleteBid(
-      bid_id as string
-    );
+    if (!bid_id) {
+      return res
+        .status(400)
+        .json({ success: false, message: "bid_id parameter is required" });
+    }
+
+    await bidsService.deleteBid(bid_id, req.user.user_id);
 
     return res.status(200).json({
       success: true,
-      message: "bid deleted successfully",
+      message: "Auction deleted successfully",
     });
-  } catch (error: any) {
-    console.error("error:", error);
+  } catch (error) {
+    const message = getErrorMessage(error);
+    console.error("Delete bid error:", message);
 
-    return res.status(500).json({
-      success: false,
-      message: error.message,
-    });
+    if (message.includes("Unauthorized")) {
+      return res.status(403).json({ success: false, message });
+    }
+    if (message.includes("pending offers")) {
+      return res.status(400).json({ success: false, message });
+    }
+    if (message.includes("not found")) {
+      return res.status(404).json({ success: false, message });
+    }
+
+    return res
+      .status(500)
+      .json({ success: false, message: "Failed to delete auction" });
   }
 };
 
@@ -128,5 +201,5 @@ export const bidsController = {
   getSingleBid,
   updateBid,
   deleteBid,
-  getMyBids
+  getMyBids,
 };

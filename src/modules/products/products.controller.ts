@@ -1,28 +1,32 @@
 import type { Request, Response } from "express";
 import { productService } from "./products.service";
-import type { JwtPayload } from "jsonwebtoken";
 
 const addProduct = async (req: Request, res: Response) => {
   try {
-    if(!req.user){
+    if (!req.user) {
       return res.status(401).json({
         success: false,
         message: "Unauthorized",
       });
     }
-    const result = await productService.addProduct(req.body, req.user.user_id as string);
+
+    const result = await productService.addProduct(req.body, String(req.user.user_id));
 
     return res.status(201).json({
       success: true,
-      message: "product added successfully",
+      message: "Product added successfully",
       data: { product_id: result },
     });
   } catch (error: any) {
-    console.error("error:", error);
+    console.error("Add product error:", error.message);
+
+    if (error.message.includes("required") || error.message.includes("must be")) {
+      return res.status(400).json({ success: false, message: error.message });
+    }
 
     return res.status(500).json({
       success: false,
-      message: error.message,
+      message: "Failed to add product",
     });
   }
 };
@@ -33,34 +37,40 @@ const getProducts = async (req: Request, res: Response) => {
 
     return res.status(200).json({
       success: true,
-      message: "products retrieved successfully",
-      data: result[0],
+      message: "Products retrieved successfully",
+      data: result,
     });
   } catch (error: any) {
-    console.error("error:", error);
-
+    console.error("Get products error:", error.message);
     return res.status(500).json({
       success: false,
-      message: error.message,
+      message: "Failed to retrieve products",
     });
   }
 };
+
 const getSingleProduct = async (req: Request, res: Response) => {
   try {
     const { product_id } = req.params;
     const result = await productService.getSingleProduct(product_id as string);
 
+    if (!result) {
+      return res.status(404).json({
+        success: false,
+        message: "Product not found",
+      });
+    }
+
     return res.status(200).json({
       success: true,
-      message: "product retrieved successfully",
-      data: result[0],
+      message: "Product retrieved successfully",
+      data: result,
     });
   } catch (error: any) {
-    console.error("error:", error);
-
+    console.error("Get single product error:", error.message);
     return res.status(500).json({
       success: false,
-      message: error.message,
+      message: "Failed to retrieve product",
     });
   }
 };
@@ -70,63 +80,102 @@ const getSellerProducts = async (req: Request, res: Response) => {
     if (!req.user) {
       return res.status(401).json({
         success: false,
-        message: "Unauthorized: no user info",
+        message: "Unauthorized",
       });
     }
-    const { user_id } = req.user as JwtPayload;
 
-    const products = await productService.getSellerProducts(user_id as string);
+    const products = await productService.getSellerProducts(String(req.user.user_id));
 
     return res.status(200).json({
       success: true,
-      data: products[0],
+      data: products,
     });
   } catch (error: any) {
+    console.error("Get seller products error:", error.message);
     return res.status(500).json({
       success: false,
-      message: error.message,
+      message: "Failed to retrieve products",
     });
   }
 };
 
 const updateProduct = async (req: Request, res: Response) => {
   try {
+    if (!req.user) {
+      return res.status(401).json({
+        success: false,
+        message: "Unauthorized",
+      });
+    }
+
     const { product_id } = req.params;
-    
-    const result = await productService.updateProduct(
+    await productService.updateProduct(
       req.body,
-      product_id as string
+      product_id as string,
+      req.user.user_id as number,
+      req.user.role as string
     );
 
     return res.status(200).json({
       success: true,
-      message: "product data updated successfully",
+      message: "Product updated successfully",
     });
   } catch (error: any) {
-    console.error("error:", error);
+    console.error("Update product error:", error.message);
+
+    if (error.message.includes("Forbidden") || error.message.includes("Unauthorized")) {
+      return res.status(403).json({ success: false, message: error.message });
+    }
+    if (error.message.includes("not found")) {
+      return res.status(404).json({ success: false, message: error.message });
+    }
+    if (error.message.includes("required") || error.message.includes("must be") || error.message.includes("cannot be empty")) {
+      return res.status(400).json({ success: false, message: error.message });
+    }
 
     return res.status(500).json({
       success: false,
-      message: error.message,
+      message: "Failed to update product",
     });
   }
 };
 
 const deleteProduct = async (req: Request, res: Response) => {
   try {
+    if (!req.user) {
+      return res.status(401).json({
+        success: false,
+        message: "Unauthorized",
+      });
+    }
+
     const { product_id } = req.params;
-    const result = await productService.deleteProduct(product_id as string);
+    await productService.deleteProduct(
+      product_id as string,
+      req.user.user_id as number,
+      req.user.role as string
+    );
 
     return res.status(200).json({
       success: true,
-      message: "product deleted successfully",
+      message: "Product deleted successfully",
     });
   } catch (error: any) {
-    console.error("error:", error);
+    console.error("Delete product error:", error.message);
+
+    if (error.message.includes("Forbidden") || error.message.includes("Unauthorized")) {
+      return res.status(403).json({ success: false, message: error.message });
+    }
+    if (error.message.includes("not found")) {
+      return res.status(404).json({ success: false, message: error.message });
+    }
+    if (error.message.includes("Cannot delete")) {
+      return res.status(400).json({ success: false, message: error.message });
+    }
 
     return res.status(500).json({
       success: false,
-      message: error.message,
+      message: "Failed to delete product",
     });
   }
 };

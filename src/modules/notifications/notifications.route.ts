@@ -1,25 +1,17 @@
 import { Router } from "express";
 import { notificationsController } from "./notifications.controller";
+import auth from "../../middleware/auth";
 
 const router = Router();
 
-router.get("/", notificationsController.getNotifications);
-router.get(
-  "/me/:user_id",
-  notificationsController.getMyNotifications
-);
-router.get(
-  "/:notification_id",
-  notificationsController.getSingleNotification
-);
+// Internal/service use — no auth required (called by other services)
 router.post("/", notificationsController.addNotification);
-router.patch(
-  "/:notification_id/read",
-  notificationsController.markAsRead
-);
-router.delete(
-  "/:notification_id",
-  notificationsController.deleteNotification
-);
+
+// User-facing routes — require authentication
+router.get("/my-notifications", auth(), notificationsController.getMyNotifications);
+router.get("/unread-count", auth(), notificationsController.getUnreadCount);
+router.patch("/:notification_id/read", auth(), notificationsController.markAsRead);
+router.patch("/read-all", auth(), notificationsController.markAllAsRead);
+router.delete("/:notification_id", auth(), notificationsController.deleteNotification);
 
 export const notificationsRouter = router;

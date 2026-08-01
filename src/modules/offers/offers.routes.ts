@@ -4,17 +4,22 @@ import auth from "../../middleware/auth";
 
 const router = Router();
 
+// Buyer routes
 router.get("/my-offers", auth("buyer"), offersController.getMyOffers);
-router.get("/", offersController.getOffers);
+router.post("/", auth("buyer"), offersController.addOffer);
+router.put("/:offer_id", auth("buyer"), offersController.updateOffer);
+
+// Seller routes
 router.get(
   "/bid/:bid_id",
   auth("seller", "admin"),
   offersController.getBidOffers
 );
 router.post("/:offer_id/accept", auth("seller"), offersController.acceptOffer);
-router.get("/:offer_id", offersController.getSingleOffer);
-router.post("/", auth("buyer"), offersController.addOffer);
-router.put("/:offer_id", offersController.updateOffer);
-router.delete("/:offer_id", offersController.deleteOffer);
+
+// Shared/Admin routes
+router.get("/", auth("admin"), offersController.getOffers);
+router.get("/:offer_id", auth(), offersController.getSingleOffer);
+router.delete("/:offer_id", auth(), offersController.deleteOffer);
 
 export const offersRouter = router;
