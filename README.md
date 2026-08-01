@@ -19,6 +19,8 @@
 BidStock Server is the API layer for a B2B wholesale auction and inventory management platform. Built with **Node.js**, **Express.js**, and **TypeScript**, it implements a **modular MVC architecture** across 10 business domains, a **variadic JWT auth middleware** supporting multi-role access control, **MySQL connection pooling** with `mysql2/promise`, and **programmatic database schema initialization** that creates all tables on application startup. The relational schema uses a **role-specific sub-table inheritance pattern** (users → buyers/sellers/warehouse_owners) with `ON DELETE CASCADE` referential integrity.
 
 > 🔗 **Frontend Repo:** [bidstock-client](https://github.com/ishtiakalhumaidi/bidstock-client)
+> 🔗 **Live API:** [bidstock-API](https://bidstock-server.vercel.app)
+> 🔗 **Live Demo:** [bidstock](https://bidstock.vercel.app/)
 
 ---
 
