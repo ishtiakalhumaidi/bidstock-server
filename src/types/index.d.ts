@@ -1,10 +1,14 @@
 import { JwtPayload } from "jsonwebtoken";
 
+export type UserRole = "buyer" | "seller" | "warehouse_owner" | "admin";
+
 export interface CustomJwtPayload extends JwtPayload {
   user_id: number;
+
   email: string;
   name: string;
-  role: string;
+  role: UserRole;
+  type: "access" | "refresh";
 }
 
 declare global {

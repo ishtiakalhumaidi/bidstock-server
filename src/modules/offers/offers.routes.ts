@@ -1,3 +1,4 @@
+// offers.routes.ts
 import { Router } from "express";
 import { offersController } from "./offers.controller";
 import auth from "../../middleware/auth";
@@ -9,10 +10,10 @@ router.get("/my-offers", auth("buyer"), offersController.getMyOffers);
 router.post("/", auth("buyer"), offersController.addOffer);
 router.put("/:offer_id", auth("buyer"), offersController.updateOffer);
 
-// Seller routes
+// Seller / participating buyer / admin — fine-grained check happens in the service
 router.get(
   "/bid/:bid_id",
-  auth("seller", "admin"),
+  auth(),
   offersController.getBidOffers
 );
 router.post("/:offer_id/accept", auth("seller"), offersController.acceptOffer);

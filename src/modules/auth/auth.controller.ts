@@ -1,81 +1,75 @@
+// auth.controller.ts
 import type { Request, Response } from "express";
 import { authService } from "./auth.service";
+import { AppError } from "../../utils/AppError";
 
-const signUpUser = async (req: Request, res: Response) => {
+const handleError = (res: Response, error: any, fallbackMessage: string) => {
+  console.error(fallbackMessage, error.message);
+  if (error instanceof AppError) {
+    return res
+      .status(error.statusCode)
+      .json({ success: false, message: error.message });
+  }
+  return res.status(500).json({ success: false, message: fallbackMessage });
+};
+
+const signUp = async (req: Request, res: Response) => {
   try {
     const result = await authService.signUpUser(req.body);
-
     return res.status(201).json({
       success: true,
-      message: "User created successfully",
+      message: "User registered successfully",
       data: { user_id: result },
     });
   } catch (error: any) {
-    console.error("Signup error:", error.message);
-
-    // Return proper status codes
-    if (error.message === "Email already registered") {
-      return res.status(409).json({
-        success: false,
-        message: error.message,
-      });
-    }
-    if (error.message.includes("Missing required fields") || error.message.includes("Invalid role")) {
-      return res.status(400).json({
-        success: false,
-        message: error.message,
-      });
-    }
-
-    return res.status(500).json({
-      success: false,
-      message: "Failed to create user. Please try again.",
-    });
+    return handleError(res, error, "Failed to register user");
   }
 };
 
-const signinUser = async (req: Request, res: Response) => {
+const createAdmin = async (req: Request, res: Response) => {
+  try {
+    const result = await authService.createAdminUser(req.body);
+    return res.status(201).json({
+      success: true,
+      message: "Admin created successfully",
+      data: { user_id: result },
+    });
+  } catch (error: any) {
+    return handleError(res, error, "Failed to create admin");
+  }
+};
+
+const signIn = async (req: Request, res: Response) => {
   try {
     const { email, password } = req.body;
-
-    if (!email || !password) {
-      return res.status(400).json({
-        success: false,
-        message: "Email and password are required",
-      });
-    }
-
     const result = await authService.signinUser(email, password);
-
     return res.status(200).json({
       success: true,
-      message: "User signed in successfully",
+      message: "Signed in successfully",
       data: result,
     });
   } catch (error: any) {
-    console.error("Signin error:", error.message);
+    return handleError(res, error, "Authentication failed");
+  }
+};
 
-    // Auth failures = 401, not 500
-    const authErrors = [
-      "Invalid email or password",
-      "Account suspended",
-      "Account is inactive",
-    ];
-    if (authErrors.some((msg) => error.message.includes(msg))) {
-      return res.status(401).json({
-        success: false,
-        message: error.message,
-      });
-    }
-
-    return res.status(500).json({
-      success: false,
-      message: "Login failed. Please try again.",
+const refreshToken = async (req: Request, res: Response) => {
+  try {
+    const { refreshToken } = req.body;
+    const result = await authService.refreshAccessToken(refreshToken);
+    return res.status(200).json({
+      success: true,
+      message: "Token refreshed successfully",
+      data: result,
     });
+  } catch (error: any) {
+    return handleError(res, error, "Failed to refresh token");
   }
 };
 
 export const authController = {
-  signinUser,
-  signUpUser,
+  signUp,
+  createAdmin,
+  signIn,
+  refreshToken,
 };

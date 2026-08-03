@@ -4,8 +4,7 @@ import auth from "../../middleware/auth";
 
 const router = Router();
 
-// Internal/service use — no auth required (called by other services)
-router.post("/", notificationsController.addNotification);
+
 
 // User-facing routes — require authentication
 router.get("/my-notifications", auth(), notificationsController.getMyNotifications);

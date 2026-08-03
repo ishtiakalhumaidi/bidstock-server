@@ -1,6 +1,18 @@
-import { app } from "./app";
+import { app, bootstrapDatabase } from "./app"; // Adjust path as needed
 import config from "./config";
 
-app.listen(config.port, () =>
-  console.log(`Server is running on port ${config.port}`)
-);
+const startServer = async () => {
+  try {
+    // 1. Execute the database initialization & migrations FIRST
+    await bootstrapDatabase();
+
+
+    app.listen(config.port || 5000, () => {
+      console.log(`Server is running on port ${config.port || 5000}`);
+    });
+  } catch (error) {
+    console.error("Failed to start server:", error);
+  }
+};
+
+startServer();

@@ -6,30 +6,27 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "dev": "npx tsx watch ./src/server.ts",
-    "build": "tsc"
+    "build": "tsc",
+    "seed:admin": "tsx scripts/seedAdmin.ts"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "dependencies": {
     "bcryptjs": "^3.0.3",
-    "clsx": "^2.1.1",
     "cors": "^2.8.5",
-    "date-fns": "^4.4.0",
     "dotenv": "^17.2.3",
     "express": "^5.1.0",
     "jsonwebtoken": "^9.0.3",
     "mysql2": "^3.15.3",
-    "pg": "^8.16.3",
-    "react-hot-toast": "^2.6.0",
-    "recharts": "^3.10.1",
-    "sweetalert2": "^11.26.25"
+    "pg": "^8.16.3"
   },
   "devDependencies": {
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.5",
     "@types/jsonwebtoken": "^9.0.10",
     "@types/pg": "^8.15.6",
+    "ts-node": "^10.9.2",
     "tsx": "^4.23.1",
     "typescript": "^5.9.3"
   }

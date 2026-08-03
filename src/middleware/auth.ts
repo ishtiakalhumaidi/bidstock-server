@@ -37,9 +37,22 @@ const auth = (...roles: string[]) => {
         config.jwt_secret as string,
       ) as CustomJwtPayload;
 
+      // FIX: reject anything that isn't an access token. This is what
+      // stops a refresh token (which only has { user_id, type: 'refresh' },
+      // no role) from being used as a bearer token on routes that call
+      // auth() with no roles specified. Without this check, decoded.role
+      // is undefined, and roles.includes(undefined) === false, which
+      // *looks* like "pass" to the code below on any-authenticated-user
+      // routes even though this was never meant to be a login credential.
+      if (decoded.type !== "access") {
+        return res.status(401).json({
+          success: false,
+          message: "unauthorized: invalid token type",
+        });
+      }
+
       req.user = decoded;
 
-      // Role checking with type safety
       if (roles.length > 0 && !roles.includes(decoded.role)) {
         return res.status(403).json({
           success: false,

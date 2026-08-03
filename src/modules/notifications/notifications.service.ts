@@ -1,5 +1,7 @@
+// notifications.service.ts
 import type { ResultSetHeader, RowDataPacket } from "mysql2/promise";
 import { pool } from "../../config/db";
+import { BadRequest, Forbidden, NotFound } from "../../utils/AppError";
 
 interface NotificationRow extends RowDataPacket {
   notification_id: number;
@@ -12,21 +14,51 @@ interface NotificationRow extends RowDataPacket {
   created_at: Date;
 }
 
+interface CountRow extends RowDataPacket {
+  count: number;
+}
+
+export interface GetMyNotificationsQuery {
+  page?: number | string;
+  limit?: number | string;
+  type?: "bid_update" | "transaction" | "inventory_alert" | "system";
+  is_read?: boolean | string;
+}
+
+const VALID_TYPES = ["bid_update", "transaction", "inventory_alert", "system"];
+const VALID_ENTITY_TYPES = ["bid", "transaction", "inventory", "warehouse", "system"];
+
+// ---- Helpers -----------------------------------------------------------
+
+const parsePagination = (page?: number | string, limit?: number | string) => {
+  const pageNum = Math.max(1, parseInt(String(page ?? 1), 10) || 1);
+  const limitNum = Math.min(100, Math.max(1, parseInt(String(limit ?? 20), 10) || 20));
+  const offset = (pageNum - 1) * limitNum;
+  return { pageNum, limitNum, offset };
+};
+
+// ---- Service methods -----------------------------------------------------
+
 const addNotification = async (payload: Record<string, unknown>) => {
   const { user_id, type, message, related_entity_type, related_entity_id } = payload;
 
   if (!user_id || !type || !message) {
-    throw new Error("user_id, type, and message are required");
+    throw BadRequest("user_id, type, and message are required");
   }
 
-  const validTypes = ["bid_update", "transaction", "inventory_alert", "system"];
-  if (!validTypes.includes(type as string)) {
-    throw new Error(`Invalid type. Must be one of: ${validTypes.join(", ")}`);
+  if (!VALID_TYPES.includes(type as string)) {
+    throw BadRequest(`Invalid type. Must be one of: ${VALID_TYPES.join(", ")}`);
+  }
+
+  if (related_entity_type !== undefined && related_entity_type !== null) {
+    if (!VALID_ENTITY_TYPES.includes(related_entity_type as string)) {
+      throw BadRequest(`Invalid related_entity_type. Must be one of: ${VALID_ENTITY_TYPES.join(", ")}`);
+    }
   }
 
   const [result] = await pool.query<ResultSetHeader>(
-    `INSERT INTO notifications (user_id, type, message, related_entity_type, related_entity_id) 
-     VALUES (?, ?, ?, ?, ?)`,
+    `INSERT INTO notifications (user_id, type, message, related_entity_type, related_entity_id)
+      VALUES (?, ?, ?, ?, ?)`,
     [
       user_id,
       type,
@@ -39,15 +71,74 @@ const addNotification = async (payload: Record<string, unknown>) => {
   return result.insertId;
 };
 
-const getMyNotifications = async (user_id: string | number) => {
+const notifyLowStock = async (params: {
+  seller_id: number;
+  product_name: string;
+  warehouse_location?: string;
+  quantity: number;
+  min_stock_level: number;
+  inventory_id: number;
+}) => {
+  const { seller_id, product_name, warehouse_location, quantity, min_stock_level, inventory_id } = params;
+  
+  await pool.query<ResultSetHeader>(
+    `INSERT INTO notifications (user_id, type, message, related_entity_type, related_entity_id)
+     VALUES (?, ?, ?, ?, ?)`,
+    [
+      seller_id,
+      'inventory_alert',
+      `Low stock alert: "${product_name}"${warehouse_location ? ` at ${warehouse_location}` : ''} has ${quantity} units left (below minimum of ${min_stock_level}).`,
+      'inventory',
+      inventory_id,
+    ]
+  );
+};
+
+const getMyNotifications = async (
+  user_id: string | number,
+  query: GetMyNotificationsQuery = {}
+) => {
+  const { pageNum, limitNum, offset } = parsePagination(query.page, query.limit);
+
+  const whereClauses: string[] = [`user_id = ?`];
+  const params: unknown[] = [user_id];
+
+  if (query.type) {
+    whereClauses.push(`type = ?`);
+    params.push(query.type);
+  }
+
+  if (query.is_read !== undefined) {
+    const isReadBool = query.is_read === true || query.is_read === "true";
+    whereClauses.push(`is_read = ?`);
+    params.push(isReadBool);
+  }
+
+  const whereSQL = `WHERE ${whereClauses.join(" AND ")}`;
+
+  const [countRows] = await pool.query<CountRow[]>(
+    `SELECT COUNT(*) as count FROM notifications ${whereSQL}`,
+    params
+  );
+  const total = countRows[0]?.count ?? 0;
+
   const [rows] = await pool.query<NotificationRow[]>(
     `SELECT * FROM notifications 
-     WHERE user_id = ? 
+      ${whereSQL}
      ORDER BY created_at DESC 
-     LIMIT 50`,
-    [user_id]
+      LIMIT ? OFFSET ?`,
+    [...params, limitNum, offset]
   );
-  return rows;
+
+  return {
+    data: rows,
+    pagination: {
+      page: pageNum,
+      limit: limitNum,
+      total,
+      totalPages: Math.ceil(total / limitNum),
+    },
+  };
 };
 
 const getUnreadCount = async (user_id: string | number) => {
@@ -59,19 +150,18 @@ const getUnreadCount = async (user_id: string | number) => {
 };
 
 const markAsRead = async (notification_id: string, user_id: number) => {
-  // Verify ownership first
   const [notifRows] = await pool.query<NotificationRow[]>(
     `SELECT * FROM notifications WHERE notification_id = ?`,
     [notification_id]
   );
 
   if (notifRows.length === 0) {
-    throw new Error("Notification not found");
+    throw NotFound("Notification not found");
   }
 
   const notif = notifRows[0]!;
   if (notif.user_id !== user_id) {
-    throw new Error("Forbidden: You do not own this notification");
+    throw Forbidden("Forbidden: You do not own this notification");
   }
 
   const [result] = await pool.query<ResultSetHeader>(
@@ -80,7 +170,7 @@ const markAsRead = async (notification_id: string, user_id: number) => {
   );
 
   if (result.affectedRows === 0) {
-    throw new Error("No notification found to update");
+    throw NotFound("No notification found to update");
   }
 
   return result;
@@ -95,19 +185,18 @@ const markAllAsRead = async (user_id: number) => {
 };
 
 const deleteNotification = async (notification_id: string, user_id: number) => {
-  // Verify ownership first
   const [notifRows] = await pool.query<NotificationRow[]>(
     `SELECT * FROM notifications WHERE notification_id = ?`,
     [notification_id]
   );
 
   if (notifRows.length === 0) {
-    throw new Error("Notification not found");
+    throw NotFound("Notification not found");
   }
 
   const notif = notifRows[0]!;
   if (notif.user_id !== user_id) {
-    throw new Error("Forbidden: You do not own this notification");
+    throw Forbidden("Forbidden: You do not own this notification");
   }
 
   const [result] = await pool.query<ResultSetHeader>(
@@ -116,7 +205,7 @@ const deleteNotification = async (notification_id: string, user_id: number) => {
   );
 
   if (result.affectedRows === 0) {
-    throw new Error("No notification found to delete");
+    throw NotFound("No notification found to delete");
   }
 
   return result;
@@ -124,6 +213,7 @@ const deleteNotification = async (notification_id: string, user_id: number) => {
 
 export const notificationsService = {
   addNotification,
+  notifyLowStock,
   getMyNotifications,
   getUnreadCount,
   markAsRead,

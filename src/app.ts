@@ -1,6 +1,6 @@
 import express, { type Request, type Response } from "express";
 import cors from "cors";
-import { initialDB } from "./config/db";
+import { initialDB, runMigrations } from "./config/db";
 import { userRouter } from "./modules/users/users.routes";
 import { productRouter } from "./modules/products/products.routers";
 import { warehouseRouter } from "./modules/warehouses/warehouse.routes";
@@ -20,8 +20,6 @@ app.get("/", (req: Request, res: Response) => {
   res.send("Welcome to BidStock server...");
 });
 
-initialDB();
-
 // user CRUD
 app.use("/api/v1/users", userRouter);
 
@@ -32,7 +30,7 @@ app.use("/api/v1/products", productRouter);
 app.use("/api/v1/warehouses", warehouseRouter);
 
 // inventory CRUD
-app.use("/api/v1/inventories", inventoryRouter);
+app.use("/api/v1/inventory", inventoryRouter);
 
 // bid CRUD
 app.use("/api/v1/bids", bidsRouter);
@@ -59,3 +57,16 @@ app.use((req: Request, res: Response) => {
     path: req.path,
   });
 });
+
+
+export const bootstrapDatabase = async () => {
+  try {
+    await initialDB();
+    await runMigrations();
+    console.log("[db] Database ready.");
+  } catch (error: any) {
+    console.error("[db] Failed to initialize database:", error.message);
+
+    process.exit(1);
+  }
+};

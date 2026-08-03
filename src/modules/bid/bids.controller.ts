@@ -1,10 +1,16 @@
+// bids.controller.ts
 import type { Request, Response } from "express";
 import { bidsService } from "./bids.service";
+import { AppError } from "../../utils/AppError";
 
-// Helper for type-safe error handling without 'any'
-const getErrorMessage = (error: unknown): string => {
-  if (error instanceof Error) return error.message;
-  return String(error);
+const handleError = (res: Response, error: any, fallbackMessage: string) => {
+  console.error(fallbackMessage, error.message);
+  if (error instanceof AppError) {
+    return res
+      .status(error.statusCode)
+      .json({ success: false, message: error.message });
+  }
+  return res.status(500).json({ success: false, message: fallbackMessage });
 };
 
 const addBid = async (req: Request, res: Response) => {
@@ -12,53 +18,54 @@ const addBid = async (req: Request, res: Response) => {
     if (!req.user) {
       return res.status(401).json({ success: false, message: "Unauthorized" });
     }
-
-    const result = await bidsService.addBid(req.body, req.user.user_id);
-
+    const result = await bidsService.addBid(req.body, req.user.user_id as number);
     return res.status(201).json({
       success: true,
       message: "Auction created successfully",
       data: { bid_id: result },
     });
-  } catch (error) {
-    const message = getErrorMessage(error);
-    console.error("Add bid error:", message);
-
-    if (message.includes("Unauthorized")) {
-      return res.status(403).json({ success: false, message });
-    }
-    if (
-      message.includes("required") ||
-      message.includes("must be") ||
-      message.includes("already has")
-    ) {
-      return res.status(400).json({ success: false, message });
-    }
-    if (message.includes("not found")) {
-      return res.status(404).json({ success: false, message });
-    }
-
-    return res.status(500).json({
-      success: false,
-      message: "Failed to create auction",
-    });
+  } catch (error: any) {
+    return handleError(res, error, "Failed to create auction");
   }
 };
 
-const getBids = async (_req: Request, res: Response) => {
+const getBids = async (req: Request, res: Response) => {
   try {
-    const result = await bidsService.getBids();
-
+    const { page, limit, category, min_price, max_price, seller_id, sort } = req.query;
+    const result = await bidsService.getBids({
+      page: page as string,
+      limit: limit as string,
+      category: category as string,
+      min_price: min_price as string,
+      max_price: max_price as string,
+      seller_id: seller_id as string,
+      sort: sort as "ending_soon" | "newest" | "highest_bid",
+    });
     return res.status(200).json({
       success: true,
       message: "Auctions retrieved successfully",
+      data: result.data,
+      pagination: result.pagination,
+    });
+  } catch (error: any) {
+    return handleError(res, error, "Failed to retrieve auctions");
+  }
+};
+
+const getSingleBid = async (req: Request, res: Response) => {
+  try {
+    const { bid_id } = req.params;
+    const result = await bidsService.getSingleBid(bid_id as string);
+    if (!result) {
+      return res.status(404).json({ success: false, message: "Auction not found" });
+    }
+    return res.status(200).json({
+      success: true,
+      message: "Auction retrieved successfully",
       data: result,
     });
-  } catch (error) {
-    console.error("Get bids error:", getErrorMessage(error));
-    return res
-      .status(500)
-      .json({ success: false, message: "Failed to retrieve auctions" });
+  } catch (error: any) {
+    return handleError(res, error, "Failed to retrieve auction");
   }
 };
 
@@ -67,51 +74,20 @@ const getMyBids = async (req: Request, res: Response) => {
     if (!req.user) {
       return res.status(401).json({ success: false, message: "Unauthorized" });
     }
-
-    const result = await bidsService.getMyBids(req.user.user_id);
-
+    const { page, limit } = req.query;
+    const result = await bidsService.getMyBids(
+      String(req.user.user_id),
+      page as string,
+      limit as string
+    );
     return res.status(200).json({
       success: true,
       message: "My auctions retrieved successfully",
-      data: result,
+      data: result.data,
+      pagination: result.pagination,
     });
-  } catch (error) {
-    console.error("Get my bids error:", getErrorMessage(error));
-    return res
-      .status(500)
-      .json({ success: false, message: "Failed to retrieve auctions" });
-  }
-};
-
-const getSingleBid = async (req: Request, res: Response) => {
-  try {
-    const { bid_id } = req.params;
-
-    if (!bid_id) {
-      return res
-        .status(400)
-        .json({ success: false, message: "bid_id parameter is required" });
-    }
-
-    // result is typed as `BidRow | null`
-    const result = await bidsService.getSingleBid(bid_id);
-
-    if (!result) {
-      return res
-        .status(404)
-        .json({ success: false, message: "Auction not found" });
-    }
-
-    return res.status(200).json({
-      success: true,
-      message: "Auction retrieved successfully",
-      data: result,
-    });
-  } catch (error) {
-    console.error("Get single bid error:", getErrorMessage(error));
-    return res
-      .status(500)
-      .json({ success: false, message: "Failed to retrieve auction" });
+  } catch (error: any) {
+    return handleError(res, error, "Failed to retrieve my auctions");
   }
 };
 
@@ -120,38 +96,14 @@ const updateBid = async (req: Request, res: Response) => {
     if (!req.user) {
       return res.status(401).json({ success: false, message: "Unauthorized" });
     }
-
     const { bid_id } = req.params;
-
-    if (!bid_id) {
-      return res
-        .status(400)
-        .json({ success: false, message: "bid_id parameter is required" });
-    }
-
-    await bidsService.updateBid(req.body, bid_id, req.user.user_id);
-
+    await bidsService.updateBid(req.body, bid_id as string, req.user.user_id as number);
     return res.status(200).json({
       success: true,
       message: "Auction updated successfully",
     });
-  } catch (error) {
-    const message = getErrorMessage(error);
-    console.error("Update bid error:", message);
-
-    if (message.includes("Unauthorized")) {
-      return res.status(403).json({ success: false, message });
-    }
-    if (message.includes("closed")) {
-      return res.status(400).json({ success: false, message });
-    }
-    if (message.includes("not found")) {
-      return res.status(404).json({ success: false, message });
-    }
-
-    return res
-      .status(500)
-      .json({ success: false, message: "Failed to update auction" });
+  } catch (error: any) {
+    return handleError(res, error, "Failed to update auction");
   }
 };
 
@@ -160,38 +112,14 @@ const deleteBid = async (req: Request, res: Response) => {
     if (!req.user) {
       return res.status(401).json({ success: false, message: "Unauthorized" });
     }
-
     const { bid_id } = req.params;
-
-    if (!bid_id) {
-      return res
-        .status(400)
-        .json({ success: false, message: "bid_id parameter is required" });
-    }
-
-    await bidsService.deleteBid(bid_id, req.user.user_id);
-
+    await bidsService.deleteBid(bid_id as string, req.user.user_id as number);
     return res.status(200).json({
       success: true,
       message: "Auction deleted successfully",
     });
-  } catch (error) {
-    const message = getErrorMessage(error);
-    console.error("Delete bid error:", message);
-
-    if (message.includes("Unauthorized")) {
-      return res.status(403).json({ success: false, message });
-    }
-    if (message.includes("pending offers")) {
-      return res.status(400).json({ success: false, message });
-    }
-    if (message.includes("not found")) {
-      return res.status(404).json({ success: false, message });
-    }
-
-    return res
-      .status(500)
-      .json({ success: false, message: "Failed to delete auction" });
+  } catch (error: any) {
+    return handleError(res, error, "Failed to delete auction");
   }
 };
 
@@ -199,7 +127,7 @@ export const bidsController = {
   addBid,
   getBids,
   getSingleBid,
+  getMyBids,
   updateBid,
   deleteBid,
-  getMyBids,
 };

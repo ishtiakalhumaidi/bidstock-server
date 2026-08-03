@@ -1,18 +1,36 @@
+// users.controller.ts
 import type { Request, Response } from "express";
 import { userService } from "./users.service";
+import { AppError } from "../../utils/AppError";
+
+const handleError = (res: Response, error: any, fallbackMessage: string) => {
+  console.error(fallbackMessage, error.message);
+  if (error instanceof AppError) {
+    return res
+      .status(error.statusCode)
+      .json({ success: false, message: error.message });
+  }
+  return res.status(500).json({ success: false, message: fallbackMessage });
+};
 
 const getUsers = async (req: Request, res: Response) => {
   try {
-    const result = await userService.getUsers();
-
+    const { page, limit, role, status, search } = req.query;
+    const result = await userService.getUsers({
+      page: page as string,
+      limit: limit as string,
+      role: role as "buyer" | "seller" | "warehouse_owner" | "admin",
+      status: status as "active" | "inactive" | "suspended",
+      search: search as string,
+    });
     return res.status(200).json({
       success: true,
       message: "Users retrieved successfully",
-      data: result,
+      data: result.data,
+      pagination: result.pagination,
     });
   } catch (error: any) {
-    console.error("Get users error:", error.message);
-    return res.status(500).json({ success: false, message: "Failed to retrieve users" });
+    return handleError(res, error, "Failed to retrieve users");
   }
 };
 
@@ -21,11 +39,9 @@ const getSingleUser = async (req: Request, res: Response) => {
     if (!req.user) {
       return res.status(401).json({ success: false, message: "Unauthorized" });
     }
-
     const { user_id } = req.params;
     const { user_id: id, role } = req.user;
 
-    // Strict equality with type conversion
     if (String(user_id) !== String(id) && role !== "admin") {
       return res.status(403).json({
         success: false,
@@ -34,19 +50,16 @@ const getSingleUser = async (req: Request, res: Response) => {
     }
 
     const result = await userService.getSingleUser(user_id as string);
-
     if (!result) {
       return res.status(404).json({ success: false, message: "User not found" });
     }
-
     return res.status(200).json({
       success: true,
       message: "User retrieved successfully",
       data: result,
     });
   } catch (error: any) {
-    console.error("Get single user error:", error.message);
-    return res.status(500).json({ success: false, message: "Failed to retrieve user" });
+    return handleError(res, error, "Failed to retrieve user");
   }
 };
 
@@ -55,18 +68,15 @@ const getDashboardStats = async (req: Request, res: Response) => {
     if (!req.user) {
       return res.status(401).json({ success: false, message: "Unauthorized" });
     }
-
     const { user_id, role } = req.user;
     const result = await userService.getDashboardStats(String(user_id), role as string);
-
     return res.status(200).json({
       success: true,
       message: "Dashboard stats retrieved",
       data: result,
     });
   } catch (error: any) {
-    console.error("Get dashboard stats error:", error.message);
-    return res.status(500).json({ success: false, message: "Failed to retrieve stats" });
+    return handleError(res, error, "Failed to retrieve stats");
   }
 };
 
@@ -75,11 +85,11 @@ const updateUser = async (req: Request, res: Response) => {
     if (!req.user) {
       return res.status(401).json({ success: false, message: "Unauthorized" });
     }
-
     const { user_id } = req.params;
     const { user_id: id, role } = req.user;
+    const isAdmin = role === "admin";
 
-    if (String(user_id) !== String(id) && role !== "admin") {
+    if (String(user_id) !== String(id) && !isAdmin) {
       return res.status(403).json({
         success: false,
         message: "Forbidden: you cannot update this user",
@@ -87,61 +97,33 @@ const updateUser = async (req: Request, res: Response) => {
     }
 
     const payload = { ...req.body };
-
-    // Non-admins cannot change role, status, or email to an existing one
-    if (role !== "admin") {
-      delete payload.role;
-      delete payload.status;
-    }
-
-    // Only self can change password (not even admin should set plaintext passwords)
     if (payload.password && String(user_id) !== String(id)) {
       delete payload.password;
     }
 
-    await userService.updateUser(payload, user_id as string);
-
+    await userService.updateUser(payload, user_id as string, isAdmin);
     return res.status(200).json({
       success: true,
       message: "User updated successfully",
     });
   } catch (error: any) {
-    console.error("Update user error:", error.message);
-
-    if (error.message.includes("Forbidden")) {
-      return res.status(403).json({ success: false, message: error.message });
-    }
-    if (error.message.includes("not found")) {
-      return res.status(404).json({ success: false, message: error.message });
-    }
-    if (error.message.includes("already in use") || error.message.includes("Invalid") || error.message.includes("must be")) {
-      return res.status(400).json({ success: false, message: error.message });
-    }
-
-    return res.status(500).json({ success: false, message: "Failed to update user" });
+    return handleError(res, error, "Failed to update user");
   }
 };
 
 const deleteUser = async (req: Request, res: Response) => {
   try {
+    if (!req.user) {
+      return res.status(401).json({ success: false, message: "Unauthorized" });
+    }
     const { user_id } = req.params;
-    await userService.deleteUser(user_id as string  );
-
+    await userService.deleteUser(user_id as string);
     return res.status(200).json({
       success: true,
       message: "User deleted successfully",
     });
   } catch (error: any) {
-    console.error("Delete user error:", error.message);
-
-    if (error.message.includes("not found")) {
-      return res.status(404).json({ success: false, message: error.message });
-    }
-    if (error.message.includes("Cannot delete")) {
-      return res.status(400).json({ success: false, message: error.message });
-    }
-
-    return res.status(500).json({ success: false, message: "Failed to delete user" });
+    return handleError(res, error, "Failed to delete user");
   }
 };
 
